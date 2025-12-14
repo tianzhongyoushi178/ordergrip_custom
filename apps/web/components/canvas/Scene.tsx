@@ -23,11 +23,6 @@ export const Scene = () => {
                 <group position={[0, 0, 32]}>
                     <Text
                         position={[0, 4, 0]}
-                        rotation={[0, -Math.PI / 2, 0]} // Face camera better from side view? No, orbit controls rotate. 
-                        // Let's keep billboard or fixed rotation. 
-                        // Actually, straight top-down text might be hard to read.
-                        // Let's use Billboard component if available, or just rotate to face general direction.
-                        // Standard view is usually isometric.
                         rotation={[0, Math.PI / 2, 0]}
                         fontSize={4}
                         color="#333"
