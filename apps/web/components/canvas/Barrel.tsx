@@ -11,9 +11,9 @@ export const Barrel = () => {
     // Debug log
     // console.log('Barrel Render:', length, maxDiameter, cuts.length);
 
-    const points = useMemo(() => {
-        return generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength);
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength]);
+    // const points = useMemo(() => {
+    //     return generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength);
+    // }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength]);
 
     const geometry = useMemo(() => {
         const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear);

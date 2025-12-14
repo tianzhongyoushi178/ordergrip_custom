@@ -298,7 +298,7 @@ export const Editor = () => {
                                             onChange={(e) => {
                                                 const newStart = parseFloat(e.target.value);
                                                 const currentWidth = cut.endZ - cut.startZ;
-                                                let newEnd = newStart + currentWidth;
+                                                const newEnd = newStart + currentWidth;
 
                                                 // Collision Check
                                                 if (checkCollision(cut.id, newStart, newEnd, cut.type)) {
@@ -470,7 +470,10 @@ export const Editor = () => {
             <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                 <button
                     onClick={() => {
-                        saveToLocalStorage({ length, maxDiameter, materialDensity, cuts } as any);
+                        saveToLocalStorage({
+                            length, maxDiameter, materialDensity, cuts,
+                            frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear
+                        });
                         alert('ブラウザに保存しました！');
                     }}
                     className="w-full py-3 bg-black dark:bg-white text-white dark:text-black font-bold rounded-lg hover:opacity-90 transition-opacity"
@@ -493,7 +496,10 @@ export const Editor = () => {
                         読み込み
                     </button>
                     <button
-                        onClick={() => exportToJson({ length, maxDiameter, materialDensity, cuts } as any)}
+                        onClick={() => exportToJson({
+                            length, maxDiameter, materialDensity, cuts,
+                            frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear
+                        })}
                         className="flex-1 py-2 bg-zinc-200 dark:bg-zinc-800 text-xs font-bold rounded hover:opacity-80"
                     >
                         JSON書出し

@@ -2,12 +2,16 @@ import { BarrelState } from '@/lib/store/useBarrelStore';
 
 export const STORAGE_KEY = 'dart-barrel-design';
 
-export const saveToLocalStorage = (state: BarrelState) => {
+export const saveToLocalStorage = (state: Partial<BarrelState>) => {
     const data = {
         length: state.length,
         maxDiameter: state.maxDiameter,
         cuts: state.cuts,
-        materialDensity: state.materialDensity
+        materialDensity: state.materialDensity,
+        frontTaperLength: state.frontTaperLength, // Ensure these are saved
+        rearTaperLength: state.rearTaperLength,
+        holeDepthFront: state.holeDepthFront,
+        holeDepthRear: state.holeDepthRear
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
@@ -23,12 +27,16 @@ export const loadFromLocalStorage = (): Partial<BarrelState> | null => {
     }
 };
 
-export const exportToJson = (state: BarrelState, filename: string = 'my-barrel.json') => {
+export const exportToJson = (state: Partial<BarrelState>, filename: string = 'my-barrel.json') => {
     const data = {
         length: state.length,
         maxDiameter: state.maxDiameter,
         cuts: state.cuts,
         materialDensity: state.materialDensity,
+        frontTaperLength: state.frontTaperLength,
+        rearTaperLength: state.rearTaperLength,
+        holeDepthFront: state.holeDepthFront,
+        holeDepthRear: state.holeDepthRear,
         timestamp: new Date().toISOString()
     };
 

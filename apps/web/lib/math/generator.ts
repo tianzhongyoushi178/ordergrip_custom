@@ -250,7 +250,7 @@ export const generateBarrelGeometry = (
     // Generate Vertices
     for (let i = 0; i < points.length; i++) {
         const p = points[i];
-        let rBase = p.x;
+        const rBase = p.x;
         const y = p.y; // Z position along barrel length (0 to L)
 
         // Determine surface type based on Radius and Sequence
