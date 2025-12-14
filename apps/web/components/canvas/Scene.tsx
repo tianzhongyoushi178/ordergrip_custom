@@ -48,7 +48,7 @@ export const Scene = () => {
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
-                            depthTest={false}
+                            material-depthTest={false}
                             fontWeight="bold"
                         >
                             REAR (Shaft)
