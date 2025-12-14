@@ -8,7 +8,8 @@ export const Scene = () => {
     return (
         <Canvas
             shadows
-            camera={{ position: [8, 5, 8], fov: 40 }}
+            // Adjusted camera to fit 40-50mm barrel + labels. Distance ~80-100 units.
+            camera={{ position: [40, 30, 60], fov: 35 }}
             className="absolute inset-0 z-0"
         >
             <Environment preset="city" />
@@ -17,23 +18,42 @@ export const Scene = () => {
 
             <group position={[0, 0, 0]}>
                 <Barrel />
-                {/* Visual Markers */}
-                <Text
-                    position={[0, 0, 35]}
-                    rotation={[-Math.PI / 2, 0, 0]}
-                    fontSize={2}
-                    color="#666"
-                >
-                    FRONT (Tip)
-                </Text>
-                <Text
-                    position={[0, 0, -35]}
-                    rotation={[-Math.PI / 2, 0, 0]}
-                    fontSize={2}
-                    color="#666"
-                >
-                    REAR (Shaft)
-                </Text>
+
+                {/* Visual Markers - Front (Tip) */}
+                <group position={[0, 0, 32]}>
+                    <Text
+                        position={[0, 4, 0]}
+                        rotation={[0, -Math.PI / 2, 0]} // Face camera better from side view? No, orbit controls rotate. 
+                        // Let's keep billboard or fixed rotation. 
+                        // Actually, straight top-down text might be hard to read.
+                        // Let's use Billboard component if available, or just rotate to face general direction.
+                        // Standard view is usually isometric.
+                        rotation={[0, Math.PI / 2, 0]}
+                        fontSize={4}
+                        color="#333"
+                        anchorX="center"
+                        anchorY="middle"
+                    >
+                        FRONT (Tip)
+                    </Text>
+                    {/* Metric line or arrow could go here */}
+                </group>
+
+                {/* Visual Markers - Rear (Shaft) */}
+                <group position={[0, 0, -32]}>
+                    <Text
+                        position={[0, 4, 0]}
+                        rotation={[0, Math.PI / 2, 0]}
+                        fontSize={4}
+                        color="#333"
+                        anchorX="center"
+                        anchorY="middle"
+                    >
+                        REAR (Shaft)
+                    </Text>
+                </group>
+
+                {/* Axis Line/Floor Grid helper could be added if requested, but clean is better */}
             </group>
 
             <ContactShadows resolution={1024} scale={20} blur={1} opacity={0.5} far={10} color="#000000" />
