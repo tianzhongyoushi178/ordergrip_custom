@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
+import { OrbitControls, Environment, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { Barrel } from './Barrel';
 
 export const Scene = () => {
@@ -20,32 +20,40 @@ export const Scene = () => {
                 <Barrel />
 
                 {/* Visual Markers - Front (Tip) */}
+                {/* Visual Markers - Front (Tip) */}
                 <group position={[0, 0, 32]}>
-                    <Text
-                        position={[0, 4, 0]}
-                        rotation={[0, Math.PI / 2, 0]}
-                        fontSize={4}
-                        color="#333"
-                        anchorX="center"
-                        anchorY="middle"
-                    >
-                        FRONT (Tip)
-                    </Text>
-                    {/* Metric line or arrow could go here */}
+                    <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+                        <Text
+                            position={[0, 6, 0]} // Lift up slightly
+                            fontSize={4}
+                            color="#111" // Darker
+                            anchorX="center"
+                            anchorY="middle"
+                            renderOrder={1}
+                            material-depthTest={false} // Always visible through objects
+                            fontWeight="bold"
+                        >
+                            FRONT (Tip)
+                        </Text>
+                    </Billboard>
                 </group>
 
                 {/* Visual Markers - Rear (Shaft) */}
                 <group position={[0, 0, -32]}>
-                    <Text
-                        position={[0, 4, 0]}
-                        rotation={[0, Math.PI / 2, 0]}
-                        fontSize={4}
-                        color="#333"
-                        anchorX="center"
-                        anchorY="middle"
-                    >
-                        REAR (Shaft)
-                    </Text>
+                    <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+                        <Text
+                            position={[0, 6, 0]} // Lift up slightly
+                            fontSize={4}
+                            color="#111"
+                            anchorX="center"
+                            anchorY="middle"
+                            renderOrder={1}
+                            depthTest={false}
+                            fontWeight="bold"
+                        >
+                            REAR (Shaft)
+                        </Text>
+                    </Billboard>
                 </group>
 
                 {/* Axis Line/Floor Grid helper could be added if requested, but clean is better */}
