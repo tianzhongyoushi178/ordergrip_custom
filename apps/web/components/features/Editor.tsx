@@ -92,7 +92,7 @@ export const Editor = () => {
                 className="md:hidden flex justify-between items-center px-4 h-14 cursor-pointer"
                 onClick={() => setIsMobileOpen(!isMobileOpen)}
             >
-                <h1 className="text-sm font-bold">Dart Configurator</h1>
+                <h1 className="text-sm font-bold">スペック</h1>
                 <div className="text-zinc-500">
                     {isMobileOpen ? (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -104,18 +104,18 @@ export const Editor = () => {
 
             {/* Scrollable Content */}
             <div className={`overflow-y-auto h-full px-6 pb-20 md:pb-6 ${isMobileOpen ? 'block' : 'hidden'} md:block`}>
-                <h1 className="text-xl font-bold mb-6 hidden md:block">Dart Configurator</h1>
+                <h1 className="text-xl font-bold mb-6 hidden md:block">スペック</h1>
 
                 {/* Specs Panel */}
                 <div className="mb-6 bg-zinc-100 dark:bg-zinc-800 p-4 rounded-lg">
-                    <h2 className="text-xs font-semibold text-zinc-500 mb-2 tracking-wider">SPECS (90% Tungsten)</h2>
+                    <h2 className="text-xs font-semibold text-zinc-500 mb-2 tracking-wider">スペック</h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <div className="text-xs text-zinc-500">Weight</div>
+                            <div className="text-xs text-zinc-500">重量</div>
                             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{physics.weight.toFixed(2)}<span className="text-sm text-zinc-500 ml-1">g</span></div>
                         </div>
                         <div>
-                            <div className="text-xs text-zinc-500">CoG (Front)</div>
+                            <div className="text-xs text-zinc-500">重心 (前側から)</div>
                             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{physics.centerOfGravity.toFixed(1)}<span className="text-sm text-zinc-500 ml-1">mm</span></div>
                         </div>
                     </div>
@@ -124,15 +124,15 @@ export const Editor = () => {
                 {/* Material & Tapers */}
                 <div className="space-y-6 mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-8">
                     <div>
-                        <label className="text-sm font-medium mb-2 block">Material</label>
+                        <label className="text-sm font-medium mb-2 block">素材</label>
                         <select
                             value={materialDensity}
                             onChange={(e) => setMaterialDensity(parseFloat(e.target.value))}
                             className="w-full p-2 bg-zinc-100 dark:bg-zinc-800 rounded border border-zinc-200 dark:border-zinc-700 text-sm"
                         >
-                            <option value={18.0}>95% Tungsten (18.0g/cm³)</option>
-                            <option value={17.0}>90% Tungsten (17.0g/cm³)</option>
-                            <option value={15.0}>80% Tungsten (15.0g/cm³)</option>
+                            <option value={18.0}>タングステン95% (18.0g/cm³)</option>
+                            <option value={17.0}>タングステン90% (17.0g/cm³)</option>
+                            <option value={15.0}>タングステン80% (15.0g/cm³)</option>
                         </select>
                     </div>
 
@@ -189,7 +189,7 @@ export const Editor = () => {
                     {/* Hole Depths */}
                     <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
                         <div className="flex flex-col gap-2">
-                            <label className="text-xs font-medium text-zinc-500">FRONT HOLE (mm)</label>
+                            <label className="text-xs font-medium text-zinc-500">前穴 (チップ側)</label>
                             <input
                                 type="number"
                                 min={0} max={30} step={0.5}
@@ -199,7 +199,7 @@ export const Editor = () => {
                             />
                         </div>
                         <div className="flex flex-col gap-2">
-                            <label className="text-xs font-medium text-zinc-500">REAR HOLE (mm)</label>
+                            <label className="text-xs font-medium text-zinc-500">後穴 (シャフト側)</label>
                             <input
                                 type="number"
                                 min={0} max={30} step={0.5}
@@ -215,7 +215,7 @@ export const Editor = () => {
                 <div className="space-y-6 mb-8">
                     <div>
                         <div className="flex justify-between mb-2">
-                            <label className="text-sm font-medium">Length</label>
+                            <label className="text-sm font-medium">全長</label>
                             <div className="flex items-center gap-1">
                                 <input
                                     type="number"
@@ -236,7 +236,7 @@ export const Editor = () => {
                     </div>
                     <div>
                         <div className="flex justify-between mb-2">
-                            <label className="text-sm font-medium">Max Diameter</label>
+                            <label className="text-sm font-medium">最大径</label>
                             <div className="flex items-center gap-1">
                                 <input
                                     type="number"
@@ -260,35 +260,35 @@ export const Editor = () => {
                 {/* Cuts */}
                 <div className="mb-0">
                     <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xs font-bold tracking-wider text-zinc-500">CUTS</h2>
+                        <h2 className="text-xs font-bold tracking-wider text-zinc-500">カット追加</h2>
                         <div className="grid grid-cols-4 gap-1">
-                            <button onClick={() => addBasicCut('ring')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Ring</button>
-                            <button onClick={() => addBasicCut('ring_double')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Double</button>
-                            <button onClick={() => addBasicCut('ring_triple')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Triple</button>
-                            <button onClick={() => addBasicCut('micro')} className="text-[10px] px-1 py-1 bg-blue-100 dark:bg-blue-900 rounded hover:opacity-80 text-blue-800 dark:text-blue-100">Micro</button>
+                            <button onClick={() => addBasicCut('ring')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">リング</button>
+                            <button onClick={() => addBasicCut('ring_double')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ダブル</button>
+                            <button onClick={() => addBasicCut('ring_triple')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">トリプル</button>
+                            <button onClick={() => addBasicCut('micro')} className="text-[10px] px-1 py-1 bg-blue-100 dark:bg-blue-900 rounded hover:opacity-80 text-blue-800 dark:text-blue-100">マイクロ</button>
 
-                            <button onClick={() => addBasicCut('ring_r')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">R-Ring</button>
-                            <button onClick={() => addBasicCut('ring_v')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">V-Ring</button>
-                            <button onClick={() => addBasicCut('scallop')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Scallop</button>
-                            <button onClick={() => addBasicCut('canyon')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Canyon</button>
+                            <button onClick={() => addBasicCut('ring_r')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Rリング</button>
+                            <button onClick={() => addBasicCut('ring_v')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Vリング</button>
+                            <button onClick={() => addBasicCut('scallop')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">スカラップ</button>
+                            <button onClick={() => addBasicCut('canyon')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">キャニオン</button>
 
-                            <button onClick={() => addBasicCut('shark')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Shark</button>
-                            <button onClick={() => addBasicCut('wing')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Wing</button>
-                            <button onClick={() => addBasicCut('step')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Step</button>
-                            <button onClick={() => addBasicCut('stair')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Stair</button>
-                            <button onClick={() => addBasicCut('vertical')} className="text-[10px] px-1 py-1 bg-zinc-800 text-white dark:bg-zinc-200 dark:text-black rounded hover:opacity-80 font-bold">Vertical</button>
+                            <button onClick={() => addBasicCut('shark')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">シャーク</button>
+                            <button onClick={() => addBasicCut('wing')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ウィング</button>
+                            <button onClick={() => addBasicCut('step')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステップ</button>
+                            <button onClick={() => addBasicCut('stair')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステア</button>
+                            <button onClick={() => addBasicCut('vertical')} className="text-[10px] px-1 py-1 bg-zinc-800 text-white dark:bg-zinc-200 dark:text-black rounded hover:opacity-80 font-bold">縦カット</button>
                         </div>
                     </div>
                     <div className="space-y-3 pb-8">
                         {cuts.length === 0 && (
-                            <div className="text-xs text-zinc-400 italic text-center py-4 border border-dashed border-zinc-300 rounded">No cuts added</div>
+                            <div className="text-xs text-zinc-400 italic text-center py-4 border border-dashed border-zinc-300 rounded">カットが追加されていません</div>
                         )}
                         {cuts.map(cut => (
                             <div key={cut.id} className="p-3 border border-zinc-200 dark:border-zinc-700 rounded bg-zinc-50 dark:bg-zinc-800/50 relative group">
                                 <button
                                     onClick={() => removeCut(cut.id)}
                                     className="absolute top-2 right-2 text-zinc-400 hover:text-red-500"
-                                    title="Remove"
+                                    title="削除"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                 </button>
@@ -297,19 +297,19 @@ export const Editor = () => {
                                     onChange={(e) => updateCut(cut.id, { type: e.target.value as CutType })}
                                     className="mb-3 text-xs font-bold uppercase bg-transparent border-none p-0 cursor-pointer focus:ring-0 text-zinc-500"
                                 >
-                                    <option value="ring">RING CUT</option>
-                                    <option value="ring_double">DOUBLE RING</option>
-                                    <option value="ring_triple">TRIPLE RING</option>
-                                    <option value="ring_r">R-RING CUT</option>
-                                    <option value="ring_v">V-RING CUT</option>
-                                    <option value="canyon">CANYON CUT</option>
-                                    <option value="scallop">SCALLOP CUT</option>
-                                    <option value="shark">SHARK CUT</option>
-                                    <option value="wing">WING CUT</option>
-                                    <option value="step">STEP CUT</option>
-                                    <option value="stair">STAIR CUT</option>
-                                    <option value="micro">MICRO CUT</option>
-                                    <option value="vertical">VERTICAL CUT</option>
+                                    <option value="ring">リングカット</option>
+                                    <option value="ring_double">ダブルリング</option>
+                                    <option value="ring_triple">トリプルリング</option>
+                                    <option value="ring_r">Rリングカット</option>
+                                    <option value="ring_v">Vリングカット</option>
+                                    <option value="canyon">キャニオンカット</option>
+                                    <option value="scallop">スカラップカット</option>
+                                    <option value="shark">シャークカット</option>
+                                    <option value="wing">ウィングカット</option>
+                                    <option value="step">ステップカット</option>
+                                    <option value="stair">ステアカット</option>
+                                    <option value="micro">マイクロカット</option>
+                                    <option value="vertical">縦カット</option>
                                 </select>
 
                                 <div className="space-y-3">
@@ -458,7 +458,7 @@ export const Editor = () => {
                                         {cut.type === 'vertical' && (
                                             <div className="flex flex-col gap-1 col-span-2 border-t border-dashed border-zinc-200 mt-2 pt-2">
                                                 <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase">
-                                                    <span>本数 (Count)</span>
+                                                    <span>本数</span>
                                                     <input
                                                         type="number"
                                                         min={1} max={32}

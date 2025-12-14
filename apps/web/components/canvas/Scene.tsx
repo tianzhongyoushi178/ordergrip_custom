@@ -37,7 +37,7 @@ export const Scene = () => {
                             material-depthTest={false} // Always visible through objects
                             fontWeight="bold"
                         >
-                            FRONT (Tip)
+                            前 (チップ側)
                         </Text>
                     </Billboard>
                 </group>
@@ -57,7 +57,7 @@ export const Scene = () => {
                             material-depthTest={false}
                             fontWeight="bold"
                         >
-                            REAR (Shaft)
+                            後 (シャフト側)
                         </Text>
                     </Billboard>
                 </group>
