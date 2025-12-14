@@ -3,8 +3,12 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { Barrel } from './Barrel';
+import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 export const Scene = () => {
+    const { length } = useBarrelStore();
+    const offset = 8; // mm gap from barrel end
+
     return (
         <Canvas
             shadows
@@ -20,11 +24,11 @@ export const Scene = () => {
                 <Barrel />
 
                 {/* Visual Markers - Front (Tip) */}
-                {/* Visual Markers - Front (Tip) */}
-                <group position={[0, 0, 32]}>
+                {/* Fixed Geometry: Front is at -length/2 */}
+                <group position={[0, 0, -length / 2 - offset]}>
                     <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
                         <Text
-                            position={[0, 6, 0]} // Lift up slightly
+                            position={[0, 4, 0]}
                             fontSize={4}
                             color="#111" // Darker
                             anchorX="center"
@@ -39,10 +43,12 @@ export const Scene = () => {
                 </group>
 
                 {/* Visual Markers - Rear (Shaft) */}
-                <group position={[0, 0, -32]}>
+                {/* Fixed Geometry: Rear is at +length/2 */}
+                <group position={[0, 0, length / 2 + offset]}>
                     <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+
                         <Text
-                            position={[0, 6, 0]} // Lift up slightly
+                            position={[0, 4, 0]}
                             fontSize={4}
                             color="#111"
                             anchorX="center"

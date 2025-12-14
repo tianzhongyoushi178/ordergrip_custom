@@ -25,8 +25,10 @@ export const Barrel = () => {
         // Center the geometry
         // Generator makes vertices from y=0 to y=-length (check generator logic).
         // Actually, my generator uses `vertices.push(-y)`. `y` goes 0 to length. So vertices go 0 to -length.
-        // To center it: Translate Z by length/2.
-        geom.translate(0, 0, length / 2);
+        // To center it: Translate Z by -length/2.
+        // Original Z: 0 (Front) to length (Rear).
+        // New Z: -length/2 (Front) to length/2 (Rear).
+        geom.translate(0, 0, -length / 2);
 
         return geom;
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear]);
