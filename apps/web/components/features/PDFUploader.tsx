@@ -1,14 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-import Tesseract from 'tesseract.js';
-
-// Initialize PDF.js worker
-// Using CDN for worker to avoid build complexity with Next.js/Webpack
-if (typeof window !== 'undefined' && 'Worker' in window) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs`;
-}
 
 interface ExtractedSpecs {
     length?: number;
@@ -59,6 +51,15 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
         setShowPreview(true);
 
         try {
+            // Dynamic imports to avoid SSR/Build issues with pdfjs-dist
+            const pdfjsLib = await import('pdfjs-dist');
+            const Tesseract = (await import('tesseract.js')).default;
+
+            // Set worker source dynamically to match version
+            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+            }
+
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -90,14 +91,18 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 canvas.width = viewport.width;
 
                 if (context) {
-                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    // @ts-expect-error - pdfjs-dist types mismatch for render parameters
+                    await page.render(renderContext).promise;
                     const imageData = canvas.toDataURL('image/png');
 
                     setStatus('OCR解析実行中... (これには数秒かかります)');
                     const { data: { text: ocrText } } = await Tesseract.recognize(
                         imageData,
                         'eng+jpn', // English and Japanese
-                        { logger: m => console.log(m) }
                     );
 
                     specs = extractUseableText(ocrText);
