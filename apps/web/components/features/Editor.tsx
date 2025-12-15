@@ -97,10 +97,61 @@ export const Editor = () => {
 
                 {/* PDF Import */}
                 <PDFUploader onApply={(specs) => {
+                    // 1. Basic Dimensions
                     if (specs.length) updateDimension('length', specs.length);
                     if (specs.maxDiameter) updateDimension('maxDiameter', specs.maxDiameter);
-                    // Weight is derived, so we don't set it directly.
-                    // Ideally we could adjust density to match, but for now let's just set geometry.
+                    if (specs.frontTaperLength) updateDimension('frontTaperLength', specs.frontTaperLength);
+                    if (specs.rearTaperLength) updateDimension('rearTaperLength', specs.rearTaperLength);
+
+                    // 2. Clear existing cuts if AI found new ones
+                    if (specs.cuts && specs.cuts.length > 0) {
+                        // We would need a clearCuts() method in store, but we can do setAll or just remove all manually?
+                        // Ideally we have setAll() or we can iterate. 
+                        // Let's assume we want to purely REPLACE.
+                        // However, setAll requires full state. 
+                        // Let's implement a simple loop to remove current cuts first? 
+                        // Or better: updateDimension only updates dimensions. 
+
+                        // We will use cuts directly.
+                        // First, we need to map the cut types to our valid types.
+                        const validTypes = ["ring", "ring_double", "ring_triple", "ring_r", "ring_v", "canyon", "scallop", "shark", "wing", "step", "stair", "micro", "vertical"];
+
+                        const newCuts = specs.cuts.map(c => {
+                            // Validate type
+                            let type = c.type;
+                            if (!validTypes.includes(type)) type = 'ring'; // Fallback
+
+                            return {
+                                id: Math.random().toString(36).substr(2, 9),
+                                type: type as CutType,
+                                startZ: c.startZ,
+                                endZ: c.endZ,
+                                properties: {
+                                    pitch: c.properties?.pitch || 1.0,
+                                    depth: c.properties?.depth || 0.5,
+                                    itemCount: 12 // Default for vertical
+                                }
+                            };
+                        });
+
+                        // We can use a special function or just hack it by clearing first.
+                        // Since we don't have setCuts exported, we might need to modify the store or just use setAll with current values + new cuts.
+                        // But we don't have access to current state inside this callback easily unless we use the store values we destructured.
+                        // We destructured `length`, `maxDiameter` etc. but those are values at render time. They are fine.
+
+                        // Let's fetch current state from store or just construct a new object for setAll?
+                        // Actually, Editor has access to `setAll`.
+                        setAll({
+                            length: specs.length || length,
+                            maxDiameter: specs.maxDiameter || maxDiameter,
+                            materialDensity: materialDensity, // Keep current
+                            frontTaperLength: specs.frontTaperLength || frontTaperLength,
+                            rearTaperLength: specs.rearTaperLength || rearTaperLength,
+                            holeDepthFront: holeDepthFront, // Keep
+                            holeDepthRear: holeDepthRear, // Keep
+                            cuts: newCuts
+                        });
+                    }
                 }} />
 
                 {/* Specs Panel */}
