@@ -5,6 +5,7 @@ import { generateProfile } from '@/lib/math/generator';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState } from 'react';
 import { saveToLocalStorage, loadFromLocalStorage, exportToJson } from '@/lib/storage/local';
+import { PDFUploader } from './PDFUploader';
 
 // Simple implementation without extra deps for now
 export const Editor = () => {
@@ -21,7 +22,8 @@ export const Editor = () => {
         return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear);
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear]);
 
-    const [isMobileOpen, setIsMobileOpen] = useState(false);
+    // Mobile toggle removed for split view
+    // const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     // Collision check helper
     const checkCollision = (id: string | null, start: number, end: number, type: string): boolean => {
@@ -81,34 +83,29 @@ export const Editor = () => {
     return (
         <div
             className={`
-                z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-xl transition-all duration-300
+                z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-xl
+                /* Mobile: Static (Flex item), 50% height */
+                w-full h-[50vh]
+                /* Desktop: Absolute Sidebar, Full Height */
                 md:absolute md:top-0 md:right-0 md:h-full md:w-80 md:border-l md:border-zinc-200 md:dark:border-zinc-800
-                fixed bottom-0 left-0 w-full border-t border-zinc-200 dark:border-zinc-800
-                ${isMobileOpen ? 'h-[60vh]' : 'h-14'} md:h-full
+                border-t border-zinc-200 dark:border-zinc-800
             `}
         >
-            {/* Mobile Toggle Header */}
-            <div
-                className="md:hidden flex justify-between items-center px-4 h-14 cursor-pointer"
-                onClick={() => setIsMobileOpen(!isMobileOpen)}
-            >
-                <h1 className="text-sm font-bold">スペック</h1>
-                <div className="text-zinc-500">
-                    {isMobileOpen ? (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"></path></svg>
-                    )}
-                </div>
-            </div>
-
             {/* Scrollable Content */}
-            <div className={`overflow-y-auto h-full px-6 pb-20 md:pb-6 ${isMobileOpen ? 'block' : 'hidden'} md:block`}>
-                <h1 className="text-xl font-bold mb-6 hidden md:block">スペック</h1>
+            <div className="overflow-y-auto h-full px-6 py-6 pb-20 md:pb-6">
+                <h1 className="text-xl font-bold mb-6">バレルスペック設定</h1>
+
+                {/* PDF Import */}
+                <PDFUploader onApply={(specs) => {
+                    if (specs.length) updateDimension('length', specs.length);
+                    if (specs.maxDiameter) updateDimension('maxDiameter', specs.maxDiameter);
+                    // Weight is derived, so we don't set it directly.
+                    // Ideally we could adjust density to match, but for now let's just set geometry.
+                }} />
 
                 {/* Specs Panel */}
                 <div className="mb-6 bg-zinc-100 dark:bg-zinc-800 p-4 rounded-lg">
-                    <h2 className="text-xs font-semibold text-zinc-500 mb-2 tracking-wider">スペック</h2>
+                    <h2 className="text-xs font-semibold text-zinc-500 mb-2 tracking-wider">バレルスペック設定</h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <div className="text-xs text-zinc-500">重量</div>

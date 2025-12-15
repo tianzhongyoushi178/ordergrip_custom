@@ -3,7 +3,7 @@ import { Editor } from '@/components/features/Editor';
 
 export default function Home() {
   return (
-    <main className="relative w-full h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
+    <main className="flex flex-col md:block relative w-full h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
       <div className="absolute top-4 left-6 z-10 pointer-events-none select-none">
         <h1 className="text-xl font-black tracking-tighter text-zinc-900 dark:text-zinc-50">
           BARREL <span className="text-blue-600">LAB.</span>
@@ -12,11 +12,13 @@ export default function Home() {
       </div>
 
       {/* 3D Scene Layer */}
-      <div className="absolute inset-0 z-0 cursor-move">
+      {/* Mobile: Top 50% height. Desktop: Absolute full screen background */}
+      <div className="relative w-full h-[50vh] md:absolute md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none">
         <Scene />
       </div>
 
       {/* UI Overlay */}
+      {/* Editor component handles its own sizing (h-50vh on mobile, absolute sidebar on desktop) */}
       <Editor />
     </main>
   );
