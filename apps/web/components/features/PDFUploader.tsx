@@ -246,17 +246,26 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
             <div className="flex gap-2">
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 py-2 bg-zinc-200 dark:bg-zinc-700 text-xs font-bold rounded hover:opacity-80 flex items-center justify-center gap-2"
+                    disabled={isProcessing}
+                    className={`flex-1 py-2 bg-zinc-200 dark:bg-zinc-700 text-xs font-bold rounded flex items-center justify-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80'}`}
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    OCR読込 (テキスト)
+                    OCR読込
                 </button>
                 <button
                     onClick={() => aiFileInputRef.current?.click()}
-                    className="flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded hover:opacity-90 flex items-center justify-center gap-2"
+                    disabled={isProcessing}
+                    className={`flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded flex items-center justify-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    AI図面解析 (完全再現)
+                    {isProcessing ? (
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    )}
+                    AI図面解析
                 </button>
             </div>
 
@@ -291,49 +300,58 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 onChange={(e) => handleFileChange(e, true)}
             />
 
-            {showPreview && (
-                <div className="mt-2 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs">
-                    <div className="font-bold mb-2 flex justify-between">
-                        <span>解析ステータス</span>
-                        <button onClick={() => setShowPreview(false)} className="text-zinc-400 hover:text-zinc-600">×</button>
-                    </div>
-                    <div className="text-zinc-500 mb-2 whitespace-pre-wrap">{status}</div>
-
-                    {result && (
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2 bg-white dark:bg-zinc-900 p-2 rounded border border-zinc-200 dark:border-zinc-700">
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-500">全長</span>
-                                    <span className="font-bold">{result.length ? result.length + 'mm' : '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-500">最大径</span>
-                                    <span className="font-bold">{result.maxDiameter ? result.maxDiameter + 'mm' : '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-500">重量</span>
-                                    <span className="font-bold">{result.weight ? result.weight + 'g' : '-'}</span>
-                                </div>
-                                <div className="flex justify-between col-span-2">
-                                    <span className="text-zinc-500">カット検出数</span>
-                                    <span className="font-bold">{result.cuts ? result.cuts.length + '個' : '0個'}</span>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    onApply(result);
-                                    setShowPreview(false);
-                                    setResult(null);
-                                    setStatus('');
-                                }}
-                                className="w-full py-1.5 bg-green-600 text-white font-bold rounded hover:bg-green-700"
-                            >
-                                このスペックを反映
-                            </button>
-                        </div>
-                    )}
+            <div className="mt-2 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs shadow-sm">
+                <div className="font-bold mb-2 flex justify-between items-center">
+                    <span className="flex items-center gap-2">
+                        {isProcessing && (
+                            <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        )}
+                        解析ステータス
+                    </span>
+                    <button onClick={() => setShowPreview(false)} className="text-zinc-400 hover:text-zinc-600">×</button>
                 </div>
+                <div className={`mb-3 p-2 rounded ${isProcessing ? 'bg-blue-50 text-blue-700' : result ? 'bg-green-50 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                    {status}
+                </div>
+
+                {result && (
+                    <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2 bg-white dark:bg-zinc-900 p-2 rounded border border-zinc-200 dark:border-zinc-700">
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">全長</span>
+                                <span className="font-bold">{result.length ? result.length + 'mm' : '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">最大径</span>
+                                <span className="font-bold">{result.maxDiameter ? result.maxDiameter + 'mm' : '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-zinc-500">重量</span>
+                                <span className="font-bold">{result.weight ? result.weight + 'g' : '-'}</span>
+                            </div>
+                            <div className="flex justify-between col-span-2">
+                                <span className="text-zinc-500">カット検出数</span>
+                                <span className="font-bold">{result.cuts ? result.cuts.length + '個' : '0個'}</span>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                onApply(result);
+                                setShowPreview(false);
+                                setResult(null);
+                                setStatus('');
+                            }}
+                            className="w-full py-1.5 bg-green-600 text-white font-bold rounded hover:bg-green-700"
+                        >
+                            このスペックを反映
+                        </button>
+                    </div>
+                )}
+            </div>
             )}
         </div>
     );
