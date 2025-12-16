@@ -100,8 +100,8 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
             setStatus('Gemini AIによる図面解析を実行中... (約10-20秒)');
 
             const genAI = new GoogleGenerativeAI(apiKey);
-            // Use specific version if generic tag fails
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+            // Use specific pinned version to avoid 404s
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
 
             const prompt = `
                 Analyze this dart barrel technical drawing. 
