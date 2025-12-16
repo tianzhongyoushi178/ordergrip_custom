@@ -11,16 +11,16 @@ import { PDFUploader } from './PDFUploader';
 export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
-        frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear,
+        frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline,
         updateDimension, addCut, removeCut, updateCut,
         setAll, setMaterialDensity
     } = useBarrelStore();
 
     // Add physics dependencies
     const physics = useMemo(() => {
-        const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength);
+        const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline);
         return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear);
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline]);
 
     // Mobile toggle removed for split view
     // const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -149,6 +149,7 @@ export const Editor = () => {
                             rearTaperLength: specs.rearTaperLength || rearTaperLength,
                             holeDepthFront: holeDepthFront, // Keep
                             holeDepthRear: holeDepthRear, // Keep
+                            outline: specs.outline || [],
                             cuts: newCuts
                         });
                     }
@@ -546,7 +547,7 @@ export const Editor = () => {
                         onClick={() => {
                             saveToLocalStorage({
                                 length, maxDiameter, materialDensity, cuts,
-                                frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear
+                                frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline
                             });
                             alert('ブラウザに保存しました！');
                         }}
@@ -572,7 +573,7 @@ export const Editor = () => {
                         <button
                             onClick={() => exportToJson({
                                 length, maxDiameter, materialDensity, cuts,
-                                frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear
+                                frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline
                             })}
                             className="flex-1 py-2 bg-zinc-200 dark:bg-zinc-800 text-xs font-bold rounded hover:opacity-80"
                         >

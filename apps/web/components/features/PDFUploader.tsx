@@ -9,6 +9,7 @@ export interface ExtractedSpecs {
     weight?: number;
     frontTaperLength?: number;
     rearTaperLength?: number;
+    outline?: { z: number; d: number; }[];
     cuts?: {
         type: string;
         startZ: number;
@@ -117,6 +118,9 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                     "weight": number,
                     "frontTaperLength": number,
                     "rearTaperLength": number,
+                    "outline": [
+                        { "z": number, "d": number } // List of coordinate points (z=distance from front, d=diameter) defining the outer profile. Include smooth curves.
+                    ],
                     "cuts": [
                         {
                             "type": "ring" | "shark" | "wing" | "micro" | "vertical" | "ring_double" | "ring_triple" | "scallop",
@@ -133,6 +137,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 - weight: Weight in grams
                 - frontTaperLength: Length of tapering at tip (mm)
                 - rearTaperLength: Length of tapering at shaft end (mm)
+                - outline: Capture at least 20-30 points to accurately trace the barrel's contour. Focus on curves and taper transitions.
                 - startZ/endZ: Distance from front tip (mm)
                 
                 Rules:

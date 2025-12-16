@@ -6,7 +6,8 @@ export const generateProfile = (
     maxDiameter: number,
     cuts: CutZone[],
     frontTaperLen: number = 10,
-    rearTaperLen: number = 10
+    rearTaperLen: number = 10,
+    outline: { z: number, d: number }[] = []
 ): THREE.Vector2[] => {
     const points: THREE.Vector2[] = [];
     const baseRadius = maxDiameter / 2;
@@ -15,9 +16,12 @@ export const generateProfile = (
     // 0.1mm is good for visual fidelity of cuts.
     const resolution = 0.1;
 
-    // End radii
-    const tipRadius = 2.9; // 5.8mm diameter (User request)
-    const threadRadius = 2.9; // 5.8mm diameter (User request)
+    // End radii (only used if no outline)
+    const tipRadius = 2.9; // 5.8mm diameter
+    const threadRadius = 2.9; // 5.8mm diameter
+
+    // Sort outline points by Z just in case
+    const sortedOutline = [...outline].sort((a, b) => a.z - b.z);
 
     for (let z = 0; z <= length; z += resolution) {
         // Ensure we hit the exact end
@@ -26,15 +30,41 @@ export const generateProfile = (
         let r = baseRadius;
 
         // 1. Basic Shape Profile
-        // Front Taper
-        if (z < frontTaperLen) {
-            // Linear interpolate
-            r = tipRadius + (baseRadius - tipRadius) * (z / frontTaperLen);
-        }
-        // Rear Taper
-        else if (z > length - rearTaperLen) {
-            const ratio = (length - z) / rearTaperLen;
-            r = threadRadius + (baseRadius - threadRadius) * ratio;
+        if (sortedOutline.length > 1) {
+            // --- OUTLINE INTERPOLATION ---
+            // Find segment [p1, p2] where p1.z <= z <= p2.z
+            // If z is outside range, clamp to nearest end (or maybe just use end value?) here we clamp.
+
+            if (z <= sortedOutline[0].z) {
+                r = sortedOutline[0].d / 2;
+            } else if (z >= sortedOutline[sortedOutline.length - 1].z) {
+                r = sortedOutline[sortedOutline.length - 1].d / 2;
+            } else {
+                // Find index
+                // Optimization: could track index, but loop is cheap for <100 points
+                for (let i = 0; i < sortedOutline.length - 1; i++) {
+                    const p1 = sortedOutline[i];
+                    const p2 = sortedOutline[i + 1];
+                    if (z >= p1.z && z <= p2.z) {
+                        const ratio = (z - p1.z) / (p2.z - p1.z);
+                        const d = p1.d + (p2.d - p1.d) * ratio;
+                        r = d / 2;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // --- TRADITIONAL TAPER LOGIC (Fallback) ---
+            // Front Taper
+            if (z < frontTaperLen) {
+                // Linear interpolate
+                r = tipRadius + (baseRadius - tipRadius) * (z / frontTaperLen);
+            }
+            // Rear Taper
+            else if (z > length - rearTaperLen) {
+                const ratio = (length - z) / rearTaperLen;
+                r = threadRadius + (baseRadius - threadRadius) * ratio;
+            }
         }
 
         // 2. Apply Cuts
@@ -184,10 +214,11 @@ export const generateBarrelGeometry = (
     frontTaperLen: number,
     rearTaperLen: number,
     holeDepthFront: number,
-    holeDepthRear: number
+    holeDepthRear: number,
+    outline: { z: number, d: number }[] = []
 ): THREE.BufferGeometry => {
     // 1. Get Base Profile (Outer surface only)
-    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen);
+    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline);
 
     // 2. Construct FULL Profile (Inner -> Outer -> Inner)
     // 2BA Hole Radius approx 2.1mm

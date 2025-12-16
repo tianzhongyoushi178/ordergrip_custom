@@ -6,7 +6,7 @@ import { useBarrelStore } from '@/lib/store/useBarrelStore';
 import { generateProfile, generateBarrelGeometry } from '@/lib/math/generator';
 
 export const Barrel = () => {
-    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear } = useBarrelStore();
+    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline } = useBarrelStore();
 
     // Debug log
     // console.log('Barrel Render:', length, maxDiameter, cuts.length);
@@ -16,7 +16,7 @@ export const Barrel = () => {
     // }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength]);
 
     const geometry = useMemo(() => {
-        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear);
+        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline);
 
         // Rotate -90 deg around X to align with Z axis (standard depth).
         // Our generator made Y-axis aligned (Lathe style).
@@ -31,7 +31,7 @@ export const Barrel = () => {
         geom.translate(0, 0, -length / 2);
 
         return geom;
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline]);
 
     return (
         <mesh geometry={geometry} castShadow receiveShadow>

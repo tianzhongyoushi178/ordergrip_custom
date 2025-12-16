@@ -19,12 +19,20 @@ export interface CutZone {
   }
 }
 
+export interface OutlinePoint {
+  z: number; // Distance from front (mm)
+  d: number; // Diameter (mm)
+}
+
 export interface BarrelState {
   // Dimensions
   length: number;       // mm
   maxDiameter: number;  // mm
   frontTaperLength: number; // mm
   rearTaperLength: number;  // mm
+
+  // Custom Outline (Overrides Tapers)
+  outline: OutlinePoint[];
 
   // Material
   materialDensity: number; // g/cm3
@@ -42,6 +50,7 @@ export interface BarrelState {
   removeCut: (id: string) => void;
   updateCut: (id: string, cut: Partial<CutZone>) => void;
   setMaterialDensity: (density: number) => void;
+  setOutline: (outline: OutlinePoint[]) => void;
   setAll: (state: Partial<BarrelState>) => void;
 }
 
@@ -53,6 +62,7 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   holeDepthRear: 15.0,
   frontTaperLength: 10,
   rearTaperLength: 10,
+  outline: [],
   cuts: [],
 
   updateDimension: (key, value) => set((state) => ({ ...state, [key]: value })),
@@ -70,5 +80,6 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   })),
 
   setMaterialDensity: (density) => set({ materialDensity: density }),
+  setOutline: (outline) => set({ outline }),
   setAll: (newState) => set((state) => ({ ...state, ...newState })),
 }));
