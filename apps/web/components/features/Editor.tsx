@@ -268,7 +268,7 @@ export const Editor = () => {
                             <div className="flex items-center gap-1">
                                 <input
                                     type="number"
-                                    min="30" max="55" step="0.5"
+                                    min="20" max="55" step="0.5"
                                     value={length}
                                     onChange={(e) => updateDimension('length', parseFloat(e.target.value))}
                                     className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
@@ -277,7 +277,7 @@ export const Editor = () => {
                             </div>
                         </div>
                         <input
-                            type="range" min="30" max="55" step="0.5"
+                            type="range" min="20" max="55" step="0.5"
                             value={length}
                             onChange={(e) => updateDimension('length', parseFloat(e.target.value))}
                             className="w-full accent-blue-600"
