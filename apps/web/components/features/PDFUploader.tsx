@@ -105,11 +105,23 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
             const prompt = `
-                Analyze this dart barrel technical drawing. 
-                Extract the specifications and reconstruct the 3D shape parameters.
+                Analyze this dart barrel technical drawing to extract precise manufacturing specifications.
+                
+                ### Step 1: READ DIMENSIONS
+                First, scan the image for all numerical texts (e.g., "42.0", "7.4", "15.0"). 
+                These numbers are the ground truth. You MUST use these exact values for lengths and diameters.
+                
+                ### Step 2: IDENTIFY FEATURES
+                - **Length**: Find the overall length dimension (usually the largest longitudinal number).
+                - **Max Diameter**: Find the largest diameter dimension.
+                - **Tapers**: Look for dimensions indicating where the barrel narrows (e.g., a "10.0" dimension at the front often means Front Taper Length).
+                - **Cuts**: Identify cut regions. If a region has a dimension marking its width or position, use it.
+
+                ### Step 3: GENERATE JSON
+                Construct the 3D shape based on the dimensions found in Step 1.
                 
                 Return ONLY a valid JSON object matching the structure below.
-                Do not include markdown formatting (like \`\`\`json), comments, or units in the values.
+                Do not include markdown formatting (like \`\`\`json), comments, or units.
 
                 Expected JSON Structure:
                 {
@@ -119,33 +131,33 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                     "frontTaperLength": number,
                     "rearTaperLength": number,
                     "outline": [
-                        { "z": number, "d": number } // List of coordinate points (z=distance from front, d=diameter) defining the outer profile. Include smooth curves.
+                        // Extract at least 30 points (z, d) to trace the outer profile.
+                        // CRITICAL: Ensure "z" values for sharp changes (taper starts/ends) MATCH the dimension numbers read in Step 1.
+                        { "z": number, "d": number } 
                     ],
                     "cuts": [
                         {
                             "type": "ring" | "shark" | "wing" | "micro" | "vertical" | "ring_double" | "ring_triple" | "scallop",
-                            "startZ": number,
-                            "endZ": number,
+                            "startZ": number, // Must align with visual start
+                            "endZ": number,   // Must align with visual end
                             "properties": { "depth": number, "pitch": number }
                         }
                     ]
                 }
 
                 Definitions:
-                - length: Barrel length in mm
-                - maxDiameter: Max diameter in mm
-                - weight: Weight in grams
-                - frontTaperLength: Length of tapering at tip (mm)
-                - rearTaperLength: Length of tapering at shaft end (mm)
-                - outline: Capture at least 20-30 points to accurately trace the barrel's contour. Focus on curves and taper transitions.
-                - startZ/endZ: Distance from front tip (mm)
+                - outline: A list of points {z, d} where z=0 is the front tip. 
+                  - The first point should be {z:0, d: tipDiameter}.
+                  - The last point should be {z: length, d: threadDiameter}.
+                  - Include points at every slope change.
+                - startZ/endZ: Distance from front tip (mm).
                 
                 Rules:
                 - Output strict JSON only.
                 - No trailing commas.
                 - No comments in the output.
-                - Estimate values visually if missing.
-                - Barrel length is the reference scale.
+                - PRIORITIZE READ NUMBERS over visual estimation. 
+                - If a number is explicitly written, the output MUST equal that number.
             `;
 
             const result = await model.generateContent([
