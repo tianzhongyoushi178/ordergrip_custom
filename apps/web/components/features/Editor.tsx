@@ -182,6 +182,7 @@ export const Editor = () => {
                             <option value={18.0}>タングステン95% (18.0g/cm³)</option>
                             <option value={17.0}>タングステン90% (17.0g/cm³)</option>
                             <option value={15.0}>タングステン80% (15.0g/cm³)</option>
+                            <option value={13.5}>タングステン70% (13.5g/cm³)</option>
                         </select>
                     </div>
 
