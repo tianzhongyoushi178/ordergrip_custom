@@ -9,6 +9,7 @@ export interface ExtractedSpecs {
     weight?: number;
     frontTaperLength?: number;
     rearTaperLength?: number;
+    rearTaperStartZ?: number; // Explicit start position of rear taper
     outline?: { z: number; d: number; }[];
     cuts?: {
         type: string;
@@ -114,8 +115,12 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 ### Step 2: IDENTIFY FEATURES
                 - **Length**: Find the overall length dimension (usually the largest longitudinal number).
                 - **Max Diameter**: Find the largest diameter dimension.
-                - **Tapers**: Look for dimensions indicating where the barrel narrows (e.g., a "10.0" dimension at the front often means Front Taper Length).
-                - **Cuts**: Identify cut regions. If a region has a dimension marking its width or position, use it.
+                - **Tapers**: Look for dimensions indicating where the barrel narrows.
+                  - **Front Taper**: Usually from Z=0 to some Z value.
+                  - **Rear Taper**: IMPORTANT. Look for the Z-position where the barrel starts narrowing towards the shaft. Capture this as "rearTaperStartZ".
+                - **Cuts**: Identify cut regions. 
+                  - **Callouts**: Look for leader lines or notes like "P=0.5", "D=0.2", "w=1.0". Use these for Pitch/Depth/Width.
+                  - **Position**: Use start/end dimensions to determine startZ/endZ.
 
                 ### Step 3: GENERATE JSON
                 Construct the 3D shape based on the dimensions found in Step 1.
@@ -129,7 +134,8 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                     "maxDiameter": number,
                     "weight": number,
                     "frontTaperLength": number,
-                    "rearTaperLength": number,
+                    "rearTaperLength": number, 
+                    "rearTaperStartZ": number, // The specific Z coordinate where the rear taper begins (distance from front tip)
                     "outline": [
                         // Extract at least 30 points (z, d) to trace the outer profile.
                         // CRITICAL: Ensure "z" values for sharp changes (taper starts/ends) MATCH the dimension numbers read in Step 1.
@@ -140,7 +146,10 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                             "type": "ring" | "shark" | "wing" | "micro" | "vertical" | "ring_double" | "ring_triple" | "scallop",
                             "startZ": number, // Must align with visual start
                             "endZ": number,   // Must align with visual end
-                            "properties": { "depth": number, "pitch": number }
+                            "properties": { 
+                                "depth": number, // Read from callouts if available (default 0.5)
+                                "pitch": number  // Read from callouts if available (default 1.0)
+                            }
                         }
                     ]
                 }
@@ -151,6 +160,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                   - The last point should be {z: length, d: threadDiameter}.
                   - Include points at every slope change.
                 - startZ/endZ: Distance from front tip (mm).
+                - rearTaperStartZ: The absolute Z-distance from the tip where the straight part ends and the rear taper begins.
                 
                 Rules:
                 - Output strict JSON only.
@@ -158,6 +168,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 - No comments in the output.
                 - PRIORITIZE READ NUMBERS over visual estimation. 
                 - If a number is explicitly written, the output MUST equal that number.
+                - Scrutinize small text for Cut specs (e.g. "0.5P", "0.2D").
             `;
 
             const result = await model.generateContent([

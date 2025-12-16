@@ -146,7 +146,9 @@ export const Editor = () => {
                             maxDiameter: specs.maxDiameter || maxDiameter,
                             materialDensity: materialDensity, // Keep current
                             frontTaperLength: specs.frontTaperLength || frontTaperLength,
-                            rearTaperLength: specs.rearTaperLength || rearTaperLength,
+                            rearTaperLength: specs.rearTaperStartZ
+                                ? (specs.length || length) - specs.rearTaperStartZ
+                                : (specs.rearTaperLength || rearTaperLength),
                             holeDepthFront: holeDepthFront, // Keep
                             holeDepthRear: holeDepthRear, // Keep
                             outline: specs.outline || [],
