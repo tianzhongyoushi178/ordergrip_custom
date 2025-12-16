@@ -106,24 +106,41 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
             const prompt = `
                 Analyze this dart barrel technical drawing. 
                 Extract the specifications and reconstruct the 3D shape parameters.
-                Return ONLY a JSON object with this structure (no markdown):
+                
+                Return ONLY a valid JSON object matching the structure below.
+                Do not include markdown formatting (like \`\`\`json), comments, or units in the values.
+
+                Expected JSON Structure:
                 {
-                    "length": number (mm),
-                    "maxDiameter": number (mm),
-                    "weight": number (g),
-                    "frontTaperLength": number (mm, length of the tapering section at the front tip),
-                    "rearTaperLength": number (mm, length of the tapering section at the rear shaft side),
+                    "length": number, 
+                    "maxDiameter": number,
+                    "weight": number,
+                    "frontTaperLength": number,
+                    "rearTaperLength": number,
                     "cuts": [
                         {
-                            "type": string (choose from: "ring", "shark", "wing", "micro", "vertical", "ring_double", "ring_triple", "scallop"),
-                            "startZ": number (mm from front tip, 0 is tip),
-                            "endZ": number (mm from front tip),
-                            "properties": { "depth": number (0.1-1.0), "pitch": number (0.5-2.0) }
+                            "type": "ring" | "shark" | "wing" | "micro" | "vertical" | "ring_double" | "ring_triple" | "scallop",
+                            "startZ": number,
+                            "endZ": number,
+                            "properties": { "depth": number, "pitch": number }
                         }
                     ]
                 }
-                Estimate values visually if not explicitly written. 
-                The barrel length is the reference scale.
+
+                Definitions:
+                - length: Barrel length in mm
+                - maxDiameter: Max diameter in mm
+                - weight: Weight in grams
+                - frontTaperLength: Length of tapering at tip (mm)
+                - rearTaperLength: Length of tapering at shaft end (mm)
+                - startZ/endZ: Distance from front tip (mm)
+                
+                Rules:
+                - Output strict JSON only.
+                - No trailing commas.
+                - No comments in the output.
+                - Estimate values visually if missing.
+                - Barrel length is the reference scale.
             `;
 
             const result = await model.generateContent([
