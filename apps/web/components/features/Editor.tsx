@@ -6,15 +6,19 @@ import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState } from 'react';
 import { saveToLocalStorage, loadFromLocalStorage, exportToJson } from '@/lib/storage/local';
 import { PDFUploader } from './PDFUploader';
+import { SpecWizard } from './SpecWizard';
 
 // Simple implementation without extra deps for now
 export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
         frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline,
-        updateDimension, addCut, removeCut, updateCut,
+        shapeType,
+        updateDimension, updateShapeType, addCut, removeCut, updateCut,
         setAll, setMaterialDensity
     } = useBarrelStore();
+
+    const [showWizard, setShowWizard] = useState(true);
 
     // Add physics dependencies
     const physics = useMemo(() => {
@@ -93,7 +97,23 @@ export const Editor = () => {
         >
             {/* Scrollable Content */}
             <div className="overflow-y-auto h-full px-6 py-6 pb-20 md:pb-6">
-                <h1 className="text-xl font-bold mb-6">バレルスペック設定</h1>
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-xl font-bold">バレルスペック設定</h1>
+                    <button
+                        onClick={() => setShowWizard(true)}
+                        className="text-[10px] bg-zinc-200 dark:bg-zinc-800 px-2 py-1 rounded hover:opacity-80 transition-opacity"
+                    >
+                        再ヒアリング
+                    </button>
+                </div>
+
+                {/* Wizard Overlay */}
+                {showWizard && (
+                    <SpecWizard
+                        onComplete={() => setShowWizard(false)}
+                        onCancel={() => setShowWizard(false)}
+                    />
+                )}
 
                 {/* PDF Import */}
                 <PDFUploader onApply={(specs) => {
@@ -189,54 +209,92 @@ export const Editor = () => {
                     </div>
 
                     <div>
-                        <div className="flex justify-between mb-2">
-                            <label className="text-sm font-medium">フロントテーパー終了位置</label>
-                            <div className="flex items-center gap-1">
-                                <input
-                                    type="number"
-                                    min="0" max={length} step="0.5"
-                                    value={frontTaperLength}
-                                    onChange={(e) => updateDimension('frontTaperLength', parseFloat(e.target.value))}
-                                    className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
-                                />
-                                <span className="text-sm font-bold">mm</span>
-                            </div>
+                        <label className="text-sm font-medium mb-2 block">基本形状</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => updateShapeType('torpedo')}
+                                className={`
+                                    py-3 rounded-lg border-2 font-bold transition-all
+                                    ${shapeType === 'torpedo'
+                                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'}
+                                `}
+                            >
+                                <div className="text-sm">トルピード</div>
+                                <div className="text-[10px] font-normal opacity-60">緩やかな絞り込み</div>
+                            </button>
+                            <button
+                                onClick={() => updateShapeType('straight')}
+                                className={`
+                                    py-3 rounded-lg border-2 font-bold transition-all
+                                    ${shapeType === 'straight'
+                                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'}
+                                `}
+                            >
+                                <div className="text-sm">ストレート</div>
+                                <div className="text-[10px] font-normal opacity-60">直線的なアウトライン</div>
+                            </button>
                         </div>
-                        <input
-                            type="range" min="0" max={length} step="0.5"
-                            value={frontTaperLength}
-                            onChange={(e) => updateDimension('frontTaperLength', parseFloat(e.target.value))}
-                            className="w-full accent-blue-600"
-                        />
                     </div>
 
-                    <div>
-                        <div className="flex justify-between mb-2">
-                            <label className="text-sm font-medium">リアテーパー開始位置</label>
-                            <div className="flex items-center gap-1">
+                    <details className="group">
+                        <summary className="text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors list-none flex items-center gap-1">
+                            <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                            詳細な形状設定 (テーパー長)
+                        </summary>
+                        <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div>
+                                <div className="flex justify-between mb-2">
+                                    <label className="text-sm font-medium">フロントテーパー終了位置</label>
+                                    <div className="flex items-center gap-1">
+                                        <input
+                                            type="number"
+                                            min="0" max={length} step="0.5"
+                                            value={frontTaperLength}
+                                            onChange={(e) => updateDimension('frontTaperLength', parseFloat(e.target.value))}
+                                            className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                        />
+                                        <span className="text-sm font-bold">mm</span>
+                                    </div>
+                                </div>
                                 <input
-                                    type="number"
-                                    min="0" max={length} step="0.5"
-                                    value={(length - rearTaperLength).toFixed(1)}
+                                    type="range" min="0" max={length} step="0.5"
+                                    value={frontTaperLength}
+                                    onChange={(e) => updateDimension('frontTaperLength', parseFloat(e.target.value))}
+                                    className="w-full accent-blue-600"
+                                />
+                            </div>
+
+                            <div>
+                                <div className="flex justify-between mb-2">
+                                    <label className="text-sm font-medium">リアテーパー開始位置</label>
+                                    <div className="flex items-center gap-1">
+                                        <input
+                                            type="number"
+                                            min="0" max={length} step="0.5"
+                                            value={(length - rearTaperLength).toFixed(1)}
+                                            onChange={(e) => {
+                                                const val = parseFloat(e.target.value);
+                                                updateDimension('rearTaperLength', length - val);
+                                            }}
+                                            className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                        />
+                                        <span className="text-sm font-bold">mm</span>
+                                    </div>
+                                </div>
+                                <input
+                                    type="range" min="0" max={length} step="0.5"
+                                    value={length - rearTaperLength}
                                     onChange={(e) => {
                                         const val = parseFloat(e.target.value);
                                         updateDimension('rearTaperLength', length - val);
                                     }}
-                                    className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                    className="w-full accent-blue-600"
                                 />
-                                <span className="text-sm font-bold">mm</span>
                             </div>
                         </div>
-                        <input
-                            type="range" min="0" max={length} step="0.5"
-                            value={length - rearTaperLength}
-                            onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                updateDimension('rearTaperLength', length - val);
-                            }}
-                            className="w-full accent-blue-600"
-                        />
-                    </div>
+                    </details>
 
                     {/* Hole Depths */}
                     <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
@@ -549,6 +607,7 @@ export const Editor = () => {
                     <button
                         onClick={() => {
                             saveToLocalStorage({
+                                shapeType,
                                 length, maxDiameter, materialDensity, cuts,
                                 frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline
                             });
@@ -575,6 +634,7 @@ export const Editor = () => {
                         </button>
                         <button
                             onClick={() => exportToJson({
+                                shapeType,
                                 length, maxDiameter, materialDensity, cuts,
                                 frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline
                             })}

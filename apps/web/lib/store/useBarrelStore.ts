@@ -30,6 +30,7 @@ export interface BarrelState {
   maxDiameter: number;  // mm
   frontTaperLength: number; // mm
   rearTaperLength: number;  // mm
+  shapeType: 'torpedo' | 'straight' | 'custom';
 
   // Custom Outline (Overrides Tapers)
   outline: OutlinePoint[];
@@ -46,6 +47,7 @@ export interface BarrelState {
 
   // Actions
   updateDimension: (property: 'length' | 'maxDiameter' | 'frontTaperLength' | 'rearTaperLength' | 'holeDepthFront' | 'holeDepthRear', value: number) => void;
+  updateShapeType: (shapeType: 'torpedo' | 'straight' | 'custom') => void;
   addCut: (cut: CutZone) => void;
   removeCut: (id: string) => void;
   updateCut: (id: string, cut: Partial<CutZone>) => void;
@@ -62,10 +64,20 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   holeDepthRear: 15.0,
   frontTaperLength: 10,
   rearTaperLength: 10,
+  shapeType: 'torpedo',
   outline: [],
   cuts: [],
 
-  updateDimension: (key, value) => set((state) => ({ ...state, [key]: value })),
+  updateDimension: (key, value) => set((state) => ({ ...state, [key]: value, shapeType: 'custom' })),
+
+  updateShapeType: (shapeType) => set((state) => {
+    if (shapeType === 'torpedo') {
+      return { ...state, shapeType, frontTaperLength: 15, rearTaperLength: 15 };
+    } else if (shapeType === 'straight') {
+      return { ...state, shapeType, frontTaperLength: 5, rearTaperLength: 5 };
+    }
+    return { ...state, shapeType };
+  }),
 
   addCut: (cut) => set((state) => ({
     cuts: [...state.cuts, cut]
