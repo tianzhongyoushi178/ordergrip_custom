@@ -4,10 +4,22 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { Barrel } from './Barrel';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
+import { useEffect, useState } from 'react';
 
 export const Scene = () => {
     const { length } = useBarrelStore();
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     const offset = 8; // mm gap from barrel end
+    const fontSize = isMobile ? 2.5 : 4;
+    const labelY = isMobile ? 8 : 4; // Move labels higher on mobile
 
     return (
         <Canvas
@@ -28,8 +40,8 @@ export const Scene = () => {
                 <group position={[0, 0, -length / 2 - offset]}>
                     <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
                         <Text
-                            position={[0, 4, 0]}
-                            fontSize={4}
+                            position={[0, labelY, 0]}
+                            fontSize={fontSize}
                             color="#111" // Darker
                             anchorX="center"
                             anchorY="middle"
@@ -48,8 +60,8 @@ export const Scene = () => {
                     <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
 
                         <Text
-                            position={[0, 4, 0]}
-                            fontSize={4}
+                            position={[0, labelY, 0]}
+                            fontSize={fontSize}
                             color="#111"
                             anchorX="center"
                             anchorY="middle"
