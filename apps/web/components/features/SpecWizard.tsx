@@ -70,7 +70,7 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
     if (!hasMounted) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 pt-16 sm:pt-4 sm:items-center">
             <div className="w-full max-w-[340px] sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[520px] sm:max-h-[90vh] animate-in fade-in zoom-in duration-300">
                 {/* Header - Very Slim for Mobile */}
                 <div className="p-3 sm:p-5 border-b border-zinc-800 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 shrink-0 text-center">
