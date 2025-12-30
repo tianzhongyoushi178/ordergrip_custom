@@ -78,7 +78,7 @@ export const Scene = () => {
             </group>
 
             <ContactShadows resolution={1024} scale={20} blur={1} opacity={0.5} far={10} color="#000000" />
-            <OrbitControls makeDefault />
+            <OrbitControls makeDefault target={[0, isMobile ? -9 : 0, 0]} />
         </Canvas>
     );
 };
