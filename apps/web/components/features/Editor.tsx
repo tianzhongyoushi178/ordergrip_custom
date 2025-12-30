@@ -88,10 +88,10 @@ export const Editor = () => {
         <div
             className={`
                 z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-xl
-                /* Mobile: Static (Flex item), 50% height */
-                w-full h-[50vh]
+                /* Mobile: Absolute Bottom Sheet, 60% height */
+                absolute bottom-0 w-full h-[60vh] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.1)]
                 /* Desktop: Absolute Sidebar, Full Height */
-                md:absolute md:top-0 md:right-0 md:h-full md:w-80 md:border-l md:border-zinc-200 md:dark:border-zinc-800
+                md:top-0 md:right-0 md:h-full md:w-80 md:border-l md:border-zinc-200 md:dark:border-zinc-800 md:rounded-none
                 border-t border-zinc-200 dark:border-zinc-800
             `}
         >
@@ -372,21 +372,21 @@ export const Editor = () => {
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xs font-bold tracking-wider text-zinc-500">カット追加</h2>
                         <div className="grid grid-cols-4 gap-1">
-                            <button onClick={() => addBasicCut('ring')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">リング</button>
-                            <button onClick={() => addBasicCut('ring_double')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ダブル</button>
-                            <button onClick={() => addBasicCut('ring_triple')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">トリプル</button>
-                            <button onClick={() => addBasicCut('micro')} className="text-[10px] px-1 py-1 bg-blue-100 dark:bg-blue-900 rounded hover:opacity-80 text-blue-800 dark:text-blue-100">マイクロ</button>
+                            <button onClick={() => addBasicCut('ring')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">リング</button>
+                            <button onClick={() => addBasicCut('ring_double')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ダブル</button>
+                            <button onClick={() => addBasicCut('ring_triple')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">トリプル</button>
+                            <button onClick={() => addBasicCut('micro')} className="text-xs px-1 py-1 bg-blue-100 dark:bg-blue-900 rounded hover:opacity-80 text-blue-800 dark:text-blue-100">マイクロ</button>
 
-                            <button onClick={() => addBasicCut('ring_r')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Rリング</button>
-                            <button onClick={() => addBasicCut('ring_v')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Vリング</button>
-                            <button onClick={() => addBasicCut('scallop')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">スカラップ</button>
-                            <button onClick={() => addBasicCut('canyon')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">キャニオン</button>
+                            <button onClick={() => addBasicCut('ring_r')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Rリング</button>
+                            <button onClick={() => addBasicCut('ring_v')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Vリング</button>
+                            <button onClick={() => addBasicCut('scallop')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">スカラップ</button>
+                            <button onClick={() => addBasicCut('canyon')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">キャニオン</button>
 
-                            <button onClick={() => addBasicCut('shark')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">シャーク</button>
-                            <button onClick={() => addBasicCut('wing')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ウィング</button>
-                            <button onClick={() => addBasicCut('step')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステップ</button>
-                            <button onClick={() => addBasicCut('stair')} className="text-[10px] px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステア</button>
-                            <button onClick={() => addBasicCut('vertical')} className="text-[10px] px-1 py-1 bg-zinc-800 text-white dark:bg-zinc-200 dark:text-black rounded hover:opacity-80 font-bold">縦カット</button>
+                            <button onClick={() => addBasicCut('shark')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">シャーク</button>
+                            <button onClick={() => addBasicCut('wing')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ウィング</button>
+                            <button onClick={() => addBasicCut('step')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステップ</button>
+                            <button onClick={() => addBasicCut('stair')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステア</button>
+                            <button onClick={() => addBasicCut('vertical')} className="text-xs px-1 py-1 bg-zinc-800 text-white dark:bg-zinc-200 dark:text-black rounded hover:opacity-80 font-bold">縦カット</button>
                         </div>
                     </div>
                     <div className="space-y-3 pb-8">

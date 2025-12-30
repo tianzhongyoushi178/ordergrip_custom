@@ -12,8 +12,8 @@ export default function Home() {
       </div>
 
       {/* 3D Scene Layer */}
-      {/* Mobile: Top 50% height. Desktop: Absolute full screen background */}
-      <div className="relative w-full h-[50vh] md:absolute md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none">
+      {/* Mobile: Full screen background. Desktop: Full screen background */}
+      <div className="absolute inset-0 z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none">
         <Scene />
       </div>
 
