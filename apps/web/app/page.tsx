@@ -27,8 +27,8 @@ export default function Home() {
       </button>
 
       {/* 3D Scene Layer */}
-      {/* Mobile: Full screen background. Desktop: Full screen background */}
-      <div className="absolute inset-0 z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none">
+      {/* Mobile: Top 40% height. Desktop: Full screen background */}
+      <div className="absolute top-0 left-0 w-full h-[40vh] md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none">
         <Scene />
       </div>
 

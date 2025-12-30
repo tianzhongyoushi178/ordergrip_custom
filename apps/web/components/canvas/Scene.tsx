@@ -25,7 +25,7 @@ export const Scene = () => {
             // Force update target if needed, though reset should handle it if we set defaults correctly? 
             // Actually reset() reverts to properties at mount or last save. 
             // Better to manually set:
-            controlsRef.current.target.set(0, isMobile ? -9 : 0, 0);
+            controlsRef.current.target.set(0, 0, 0);
             controlsRef.current.object.position.set(40, 30, 60);
             controlsRef.current.update();
         }
@@ -93,7 +93,7 @@ export const Scene = () => {
             </group>
 
             <ContactShadows resolution={1024} scale={20} blur={1} opacity={0.5} far={10} color="#000000" />
-            <OrbitControls ref={controlsRef} makeDefault target={[0, isMobile ? -9 : 0, 0]} />
+            <OrbitControls ref={controlsRef} makeDefault target={[0, 0, 0]} />
         </Canvas>
     );
 };
