@@ -1,3 +1,5 @@
+'use client';
+
 import { Scene } from '@/components/canvas/Scene';
 import { Editor } from '@/components/features/Editor';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
