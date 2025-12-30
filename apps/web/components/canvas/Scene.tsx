@@ -4,11 +4,12 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { Barrel } from './Barrel';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 export const Scene = () => {
-    const { length } = useBarrelStore();
+    const { length, cameraResetTrigger } = useBarrelStore();
     const [isMobile, setIsMobile] = useState(false);
+    const controlsRef = useRef<any>(null);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -16,6 +17,19 @@ export const Scene = () => {
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
+
+    // Reset Camera Effect
+    useEffect(() => {
+        if (controlsRef.current) {
+            controlsRef.current.reset();
+            // Force update target if needed, though reset should handle it if we set defaults correctly? 
+            // Actually reset() reverts to properties at mount or last save. 
+            // Better to manually set:
+            controlsRef.current.target.set(0, isMobile ? -9 : 0, 0);
+            controlsRef.current.object.position.set(40, 30, 60);
+            controlsRef.current.update();
+        }
+    }, [cameraResetTrigger, isMobile]);
 
     const offset = 8; // mm gap from barrel end
     const fontSize = isMobile ? 2.5 : 4;
@@ -25,6 +39,7 @@ export const Scene = () => {
         <Canvas
             shadows
             // Adjusted camera to fit 40-50mm barrel + labels. Distance ~80-100 units.
+            // On mobile, we might want to zoom out a bit more?
             camera={{ position: [40, 30, 60], fov: 35 }}
             className="absolute inset-0 z-0"
         >
@@ -78,7 +93,7 @@ export const Scene = () => {
             </group>
 
             <ContactShadows resolution={1024} scale={20} blur={1} opacity={0.5} far={10} color="#000000" />
-            <OrbitControls makeDefault target={[0, isMobile ? -9 : 0, 0]} />
+            <OrbitControls ref={controlsRef} makeDefault target={[0, isMobile ? -9 : 0, 0]} />
         </Canvas>
     );
 };

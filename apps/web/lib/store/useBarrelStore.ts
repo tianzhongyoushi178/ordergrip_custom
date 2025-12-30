@@ -54,6 +54,10 @@ export interface BarrelState {
   setMaterialDensity: (density: number) => void;
   setOutline: (outline: OutlinePoint[]) => void;
   setAll: (state: Partial<BarrelState>) => void;
+
+  // Camera Control
+  cameraResetTrigger: number;
+  triggerCameraReset: () => void;
 }
 
 export const useBarrelStore = create<BarrelState>((set) => ({
@@ -94,4 +98,7 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   setMaterialDensity: (density) => set({ materialDensity: density }),
   setOutline: (outline) => set({ outline }),
   setAll: (newState) => set((state) => ({ ...state, ...newState })),
+
+  cameraResetTrigger: 0,
+  triggerCameraReset: () => set((state) => ({ cameraResetTrigger: state.cameraResetTrigger + 1 })),
 }));
