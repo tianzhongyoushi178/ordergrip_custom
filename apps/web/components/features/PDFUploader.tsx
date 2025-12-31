@@ -44,6 +44,32 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
         localStorage.setItem('gemini_api_key', key);
     };
 
+    // Password Protection State
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordInput, setPasswordInput] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+
+    const handleAiClick = () => {
+        if (isAuthenticated) {
+            aiFileInputRef.current?.click();
+        } else {
+            setShowPasswordModal(true);
+            setPasswordInput('');
+            setPasswordError('');
+        }
+    };
+
+    const verifyPassword = () => {
+        if (passwordInput === 'OG2031') {
+            setIsAuthenticated(true);
+            setShowPasswordModal(false);
+            aiFileInputRef.current?.click();
+        } else {
+            setPasswordError('パスワードが違います');
+        }
+    };
+
     const extractUseableText = (text: string): ExtractedSpecs => {
         const specs: ExtractedSpecs = {};
 
@@ -299,7 +325,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                     OCR読込
                 </button>
                 <button
-                    onClick={() => aiFileInputRef.current?.click()}
+                    onClick={handleAiClick}
                     disabled={isProcessing}
                     className={`flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded flex items-center justify-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                 >
@@ -315,21 +341,69 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 </button>
             </div>
 
-            {showApiKeyInput && (
-                <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded">
-                    <p className="text-[10px] text-yellow-800 dark:text-yellow-200 mb-1">Gemini APIキーを入力してください</p>
-                    <div className="flex gap-1">
-                        <input
-                            type="password"
-                            value={apiKey}
-                            onChange={(e) => saveApiKey(e.target.value)}
-                            className="flex-1 p-1 text-xs border rounded"
-                            placeholder="AIza..."
-                        />
-                        <button onClick={() => setShowApiKeyInput(false)} className="px-2 py-1 bg-zinc-200 rounded text-xs">OK</button>
+            {/* Password Modal */}
+            {showPasswordModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-2xl w-full max-w-sm border border-zinc-200 dark:border-zinc-800 animate-in zoom-in duration-200">
+                        <h3 className="text-lg font-bold mb-4 text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            AI解析機能のロック解除
+                        </h3>
+                        <p className="text-sm text-zinc-500 mb-4">
+                            この機能を使用するにはパスワードが必要です。
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <input
+                                    type="password"
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                    placeholder="パスワードを入力"
+                                    className="w-full p-2 border border-zinc-300 dark:border-zinc-700 rounded bg-zinc-50 dark:bg-zinc-800 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                    autoFocus
+                                    onKeyDown={(e) => e.key === 'Enter' && verifyPassword()}
+                                />
+                                {passwordError && <p className="text-red-500 text-xs mt-1 font-bold">{passwordError}</p>}
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowPasswordModal(false)}
+                                    className="flex-1 py-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold rounded hover:bg-zinc-300 dark:hover:bg-zinc-700"
+                                >
+                                    キャンセル
+                                </button>
+                                <button
+                                    onClick={verifyPassword}
+                                    className="flex-1 py-2 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 shadow-lg shadow-indigo-500/20"
+                                >
+                                    解除する
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
+
+
+            {
+                showApiKeyInput && (
+                    <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded">
+                        <p className="text-[10px] text-yellow-800 dark:text-yellow-200 mb-1">Gemini APIキーを入力してください</p>
+                        <div className="flex gap-1">
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => saveApiKey(e.target.value)}
+                                className="flex-1 p-1 text-xs border rounded"
+                                placeholder="AIza..."
+                            />
+                            <button onClick={() => setShowApiKeyInput(false)} className="px-2 py-1 bg-zinc-200 rounded text-xs">OK</button>
+                        </div>
+                    </div>
+                )
+            }
 
             <input
                 type="file"
@@ -346,60 +420,62 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 onChange={(e) => handleFileChange(e, true)}
             />
 
-            {showPreview && (
-                <div className="mt-2 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs shadow-sm">
-                    <div className="font-bold mb-2 flex justify-between items-center">
-                        <span className="flex items-center gap-2">
-                            {isProcessing && (
-                                <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                            )}
-                            解析ステータス
-                        </span>
-                        <button onClick={() => setShowPreview(false)} className="text-zinc-400 hover:text-zinc-600">×</button>
-                    </div>
-                    <div className={`mb-3 p-2 rounded ${isProcessing ? 'bg-blue-50 text-blue-700' : result ? 'bg-green-50 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                        {status}
-                    </div>
-
-                    {result && (
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2 bg-white dark:bg-zinc-900 p-2 rounded border border-zinc-200 dark:border-zinc-700">
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-500">全長</span>
-                                    <span className="font-bold">{result.length ? result.length + 'mm' : '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-500">最大径</span>
-                                    <span className="font-bold">{result.maxDiameter ? result.maxDiameter + 'mm' : '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-500">重量</span>
-                                    <span className="font-bold">{result.weight ? result.weight + 'g' : '-'}</span>
-                                </div>
-                                <div className="flex justify-between col-span-2">
-                                    <span className="text-zinc-500">カット検出数</span>
-                                    <span className="font-bold">{result.cuts ? result.cuts.length + '個' : '0個'}</span>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    onApply(result);
-                                    setShowPreview(false);
-                                    setResult(null);
-                                    setStatus('');
-                                }}
-                                className="w-full py-1.5 bg-green-600 text-white font-bold rounded hover:bg-green-700"
-                            >
-                                このスペックを反映
-                            </button>
+            {
+                showPreview && (
+                    <div className="mt-2 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs shadow-sm">
+                        <div className="font-bold mb-2 flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                                {isProcessing && (
+                                    <svg className="animate-spin h-4 w-4 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                )}
+                                解析ステータス
+                            </span>
+                            <button onClick={() => setShowPreview(false)} className="text-zinc-400 hover:text-zinc-600">×</button>
                         </div>
-                    )}
-                </div>
-            )}
-        </div>
+                        <div className={`mb-3 p-2 rounded ${isProcessing ? 'bg-blue-50 text-blue-700' : result ? 'bg-green-50 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                            {status}
+                        </div>
+
+                        {result && (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2 bg-white dark:bg-zinc-900 p-2 rounded border border-zinc-200 dark:border-zinc-700">
+                                    <div className="flex justify-between">
+                                        <span className="text-zinc-500">全長</span>
+                                        <span className="font-bold">{result.length ? result.length + 'mm' : '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-zinc-500">最大径</span>
+                                        <span className="font-bold">{result.maxDiameter ? result.maxDiameter + 'mm' : '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-zinc-500">重量</span>
+                                        <span className="font-bold">{result.weight ? result.weight + 'g' : '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between col-span-2">
+                                        <span className="text-zinc-500">カット検出数</span>
+                                        <span className="font-bold">{result.cuts ? result.cuts.length + '個' : '0個'}</span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        onApply(result);
+                                        setShowPreview(false);
+                                        setResult(null);
+                                        setStatus('');
+                                    }}
+                                    className="w-full py-1.5 bg-green-600 text-white font-bold rounded hover:bg-green-700"
+                                >
+                                    このスペックを反映
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )
+            }
+        </div >
     );
 };
