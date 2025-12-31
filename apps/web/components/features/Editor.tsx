@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { saveToLocalStorage, loadFromLocalStorage, exportToJson } from '@/lib/storage/local';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
+import { CutSelector } from './CutSelector';
 
 // Simple implementation without extra deps for now
 export const Editor = () => {
@@ -369,25 +370,12 @@ export const Editor = () => {
 
                 {/* Cuts */}
                 <div className="mb-0">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex justify-between items-center mb-2">
                         <h2 className="text-xs font-bold tracking-wider text-zinc-500">カット追加</h2>
-                        <div className="grid grid-cols-4 gap-1">
-                            <button onClick={() => addBasicCut('ring')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">リング</button>
-                            <button onClick={() => addBasicCut('ring_double')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ダブル</button>
-                            <button onClick={() => addBasicCut('ring_triple')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">トリプル</button>
-                            <button onClick={() => addBasicCut('micro')} className="text-xs px-1 py-1 bg-blue-100 dark:bg-blue-900 rounded hover:opacity-80 text-blue-800 dark:text-blue-100">マイクロ</button>
+                    </div>
 
-                            <button onClick={() => addBasicCut('ring_r')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Rリング</button>
-                            <button onClick={() => addBasicCut('ring_v')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">Vリング</button>
-                            <button onClick={() => addBasicCut('scallop')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">スカラップ</button>
-                            <button onClick={() => addBasicCut('canyon')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">キャニオン</button>
-
-                            <button onClick={() => addBasicCut('shark')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">シャーク</button>
-                            <button onClick={() => addBasicCut('wing')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ウィング</button>
-                            <button onClick={() => addBasicCut('step')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステップ</button>
-                            <button onClick={() => addBasicCut('stair')} className="text-xs px-1 py-1 bg-zinc-200 dark:bg-zinc-700 rounded hover:opacity-80">ステア</button>
-                            <button onClick={() => addBasicCut('vertical')} className="text-xs px-1 py-1 bg-zinc-800 text-white dark:bg-zinc-200 dark:text-black rounded hover:opacity-80 font-bold">縦カット</button>
-                        </div>
+                    <div className="mb-6">
+                        <CutSelector onSelect={(type) => addBasicCut(type)} />
                     </div>
                     <div className="space-y-3 pb-8">
                         {cuts.length === 0 && (
