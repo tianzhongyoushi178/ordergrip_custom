@@ -49,8 +49,20 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [isLocked, setIsLocked] = useState(false);
+
+    useEffect(() => {
+        // Check lock status on mount
+        const locked = localStorage.getItem('gemini_ai_is_locked') === 'true';
+        if (locked) setIsLocked(true);
+    }, []);
 
     const handleAiClick = () => {
+        if (isLocked) {
+            alert('パスワード入力を3回間違えたため、このブラウザではAI解析機能がロックされています。');
+            return;
+        }
+
         if (isAuthenticated) {
             aiFileInputRef.current?.click();
         } else {
@@ -64,9 +76,21 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
         if (passwordInput === 'OG2031') {
             setIsAuthenticated(true);
             setShowPasswordModal(false);
+            localStorage.setItem('gemini_ai_lockout_count', '0'); // Reset count on success
             aiFileInputRef.current?.click();
         } else {
-            setPasswordError('パスワードが違います');
+            const currentCount = parseInt(localStorage.getItem('gemini_ai_lockout_count') || '0');
+            const newCount = currentCount + 1;
+            localStorage.setItem('gemini_ai_lockout_count', newCount.toString());
+
+            if (newCount >= 3) {
+                setIsLocked(true);
+                localStorage.setItem('gemini_ai_is_locked', 'true');
+                setShowPasswordModal(false);
+                alert('パスワード入力を3回間違えたため、機能がロックされました。');
+            } else {
+                setPasswordError(`パスワードが違います (残り${3 - newCount}回)`);
+            }
         }
     };
 
