@@ -109,16 +109,16 @@ export const generateProfile = (
                         break;
 
                     case 'shark':
-                        // /|
-                        // Ramp down from 0 to depth, then jump back
-                        // factor 0->1 : depth 0->max
-                        r -= depth * factor;
+                        // |\  (Shark fin shape)
+                        // Steep wall at front, gradual slope to rear
+                        // factor 0: max depth (steep edge), factor 1: no depth (slope end)
+                        r -= depth * (1 - factor);
                         break;
 
                     case 'wing':
-                        // |\
-                        // Jump to depth, then ramp up
-                        r -= depth * (1.0 - factor);
+                        // /\ Triangle peak (wing/fin shape)
+                        // Ridge at center, valleys at edges
+                        r -= depth * 2 * Math.abs(factor - 0.5);
                         break;
 
                     case 'ring_v':
@@ -168,23 +168,14 @@ export const generateProfile = (
                         break;
 
                     case 'stair':
-                        // Rounded Stairs /__
-                        // Like shark but with a flat step in middle?
-                        // Let's do: Slope(40%) Flat(30%) Slope(30%)?
-                        // Or: /--| ?
-                        // Let's try: Ramp(0->0.5 depth) Flat Ramp(0.5->1.0 depth)
-                        if (factor < 0.4) {
-                            r -= depth * (factor / 0.4);
+                        // Ascending staircase: 3 steps of increasing depth
+                        // ___|---|___
+                        if (factor < 0.3) {
+                            // Land (no cut)
                         } else if (factor < 0.6) {
-                            r -= depth;
+                            r -= depth * 0.5; // Mid step
                         } else {
-                            // Ramp up? 
-                            // Actually "Stair" cut in darts is often just a specific multi-ring.
-                            // Let's try multiple small steps:
-                            // |_|_| (Descending)
-                            if (factor < 0.33) r -= depth * 0.33;
-                            else if (factor < 0.66) r -= depth * 0.66;
-                            else r -= depth * 1.0;
+                            r -= depth; // Deep step
                         }
                         break;
 
