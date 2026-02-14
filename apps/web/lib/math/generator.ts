@@ -116,9 +116,10 @@ export const generateProfile = (
                         break;
 
                     case 'wing':
-                        // /\ Triangle peak (wing/fin shape)
-                        // Ridge at center, valleys at edges
-                        r -= depth * 2 * Math.abs(factor - 0.5);
+                        // Smooth reverse-shark (cosine S-curve)
+                        // Valley at front, smooth rise to peak at rear
+                        // Milder grip than shark, longer lifespan
+                        r -= depth * 0.5 * (1 + Math.cos(factor * Math.PI));
                         break;
 
                     case 'ring_v':
@@ -168,14 +169,16 @@ export const generateProfile = (
                         break;
 
                     case 'stair':
-                        // Ascending staircase: 3 steps of increasing depth
-                        // ___|---|___
-                        if (factor < 0.3) {
-                            // Land (no cut)
-                        } else if (factor < 0.6) {
-                            r -= depth * 0.5; // Mid step
+                        // Ascending staircase with smooth ramp transitions
+                        // Ramp(20%) + Flat(30%) + Ramp(20%) + Flat(30%)
+                        if (factor < 0.2) {
+                            r -= depth * 0.5 * (factor / 0.2); // Ramp to step 1
+                        } else if (factor < 0.5) {
+                            r -= depth * 0.5; // Step 1 flat
+                        } else if (factor < 0.7) {
+                            r -= depth * (0.5 + 0.5 * ((factor - 0.5) / 0.2)); // Ramp to step 2
                         } else {
-                            r -= depth; // Deep step
+                            r -= depth; // Step 2 flat
                         }
                         break;
 

@@ -42,7 +42,7 @@ const CUTS: CutDefinition[] = [
     },
     {
         id: 'wing', name: 'ウィング', category: 'aggressive',
-        icon: <path d="M4 20 L12 4 L20 20 Z" stroke="currentColor" fill="none" strokeWidth={2} />
+        icon: <path d="M4 20 Q12 2 20 4 L20 20 Z" stroke="currentColor" fill="none" strokeWidth={2} />
     },
     {
         id: 'step', name: 'ステップ', category: 'aggressive',
