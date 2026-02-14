@@ -109,10 +109,10 @@ export const generateProfile = (
                         break;
 
                     case 'shark':
-                        // |\  (Shark fin shape)
-                        // Peak at front, gradual slope down to rear valley
-                        // At pitch boundary: valley jumps back to peak (catches finger)
-                        r -= depth * factor;
+                        // /|  (Shark cut)
+                        // Front side = taper (gradual slope up), rear side = steep wall
+                        // factor 0: valley (front), factor 1: peak (rear), then steep drop
+                        r -= depth * (1 - factor);
                         break;
 
                     case 'wing':

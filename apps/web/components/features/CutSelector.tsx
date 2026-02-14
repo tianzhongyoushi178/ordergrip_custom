@@ -38,7 +38,7 @@ const CUTS: CutDefinition[] = [
     // Aggressive
     {
         id: 'shark', name: 'シャーク', category: 'aggressive',
-        icon: <path d="M4 4 L4 20 L20 20 Z" stroke="currentColor" fill="none" strokeWidth={2} />
+        icon: <path d="M4 20 L20 4 L20 20 Z" stroke="currentColor" fill="none" strokeWidth={2} />
     },
     {
         id: 'wing', name: 'ウィング', category: 'aggressive',
