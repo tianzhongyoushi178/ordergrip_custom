@@ -16,6 +16,9 @@ export interface CutZone {
     pitch?: number; // mm
     depth?: number; // mm
     itemCount?: number; // For vertical cuts (number of cuts along circumference)
+    cutWidth?: number;  // 溝の幅 mm (ring系用)
+    gapWidth?: number;  // カット間 mm (double/triple用)
+    flatWidth?: number; // 頂点ストレート長さ mm (wing用)
   }
 }
 

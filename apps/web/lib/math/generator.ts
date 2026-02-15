@@ -86,27 +86,41 @@ export const generateProfile = (
 
                 switch (cut.type) {
                     case 'ring':
-                    case 'micro': // Micro is just fine-pitch ring
-                        // |__|--
-                        // Cut for 50% of the pitch
-                        if (factor < 0.5) r -= depth;
+                    case 'micro': {
+                        // |__|-- Adjustable groove width
+                        const cwRing = Math.min(cut.properties.cutWidth ?? pitch * 0.5, pitch * 0.95);
+                        if (factor < cwRing / pitch) r -= depth;
                         break;
+                    }
 
-                    case 'ring_double':
-                        // ||_||_--
-                        // Two cuts. Cut(25%) Gap(15%) Cut(25%) Land(35%)
-                        if (factor < 0.25 || (factor > 0.4 && factor < 0.65)) {
+                    case 'ring_double': {
+                        // ||_||_-- Two grooves with adjustable width and gap
+                        const cwD = cut.properties.cutWidth ?? pitch * 0.2;
+                        const gwD = cut.properties.gapWidth ?? pitch * 0.15;
+                        const cwDR = cwD / pitch;
+                        const gwDR = gwD / pitch;
+                        if (factor < cwDR || (factor >= cwDR + gwDR && factor < 2 * cwDR + gwDR)) {
                             r -= depth;
                         }
                         break;
+                    }
 
-                    case 'ring_triple':
-                        // ||_||_||--
-                        // Cut(20%) Gap(10%) Cut(20%) Gap(10%) Cut(20%) Land(20%)
-                        if (factor < 0.2 || (factor > 0.3 && factor < 0.5) || (factor > 0.6 && factor < 0.8)) {
+                    case 'ring_triple': {
+                        // ||_||_||-- Three grooves with adjustable width and gap
+                        const cwT = cut.properties.cutWidth ?? pitch * 0.15;
+                        const gwT = cut.properties.gapWidth ?? pitch * 0.1;
+                        const cwTR = cwT / pitch;
+                        const gwTR = gwT / pitch;
+                        const g1 = cwTR;
+                        const g2s = cwTR + gwTR;
+                        const g2 = 2 * cwTR + gwTR;
+                        const g3s = 2 * cwTR + 2 * gwTR;
+                        const g3 = 3 * cwTR + 2 * gwTR;
+                        if (factor < g1 || (factor >= g2s && factor < g2) || (factor >= g3s && factor < g3)) {
                             r -= depth;
                         }
                         break;
+                    }
 
                     case 'shark':
                         // /|  (Shark cut)
@@ -115,12 +129,20 @@ export const generateProfile = (
                         r -= depth * (1 - factor);
                         break;
 
-                    case 'wing':
-                        // Smooth reverse-shark (cosine S-curve)
-                        // Valley at front, smooth rise to peak at rear
-                        // Milder grip than shark, longer lifespan
-                        r -= depth * 0.5 * (1 + Math.cos(factor * Math.PI));
+                    case 'wing': {
+                        // Shark + flat peak (taper → straight → steep wall)
+                        //       _____
+                        //      /     |  ← steep drop at pitch boundary
+                        //     /      |
+                        //    /       |
+                        const fw = Math.min(cut.properties.flatWidth ?? pitch * 0.3, pitch * 0.9);
+                        const taperR = 1 - fw / pitch;
+                        if (taperR > 0 && factor < taperR) {
+                            r -= depth * (1 - factor / taperR);
+                        }
+                        // else: flat peak (no cut)
                         break;
+                    }
 
                     case 'ring_v':
                         // V-shape \/

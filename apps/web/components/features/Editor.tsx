@@ -584,6 +584,102 @@ export const Editor = () => {
                                                 />
                                             </div>
                                         )}
+                                        {/* Ring系: 溝の幅 (cutWidth) */}
+                                        {(['ring', 'micro', 'ring_double', 'ring_triple'] as const).includes(cut.type as 'ring') && (
+                                            <div className="flex flex-col gap-1 col-span-2 border-t border-dashed border-zinc-200 mt-2 pt-2">
+                                                <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase">
+                                                    <span>溝の幅</span>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05}
+                                                        value={cut.properties.cutWidth ?? ((cut.properties.pitch || 1.0) * (cut.type === 'ring' || cut.type === 'micro' ? 0.5 : cut.type === 'ring_double' ? 0.2 : 0.15))}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            updateCut(cut.id, {
+                                                                properties: { ...cut.properties, cutWidth: val }
+                                                            });
+                                                        }}
+                                                        className="w-10 p-0.5 text-right bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min={0.05} max={(cut.properties.pitch || 1.0) * 0.8} step={0.05}
+                                                    value={cut.properties.cutWidth ?? ((cut.properties.pitch || 1.0) * (cut.type === 'ring' || cut.type === 'micro' ? 0.5 : cut.type === 'ring_double' ? 0.2 : 0.15))}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        updateCut(cut.id, {
+                                                            properties: { ...cut.properties, cutWidth: val }
+                                                        });
+                                                    }}
+                                                    className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Double/Triple Ring: カット間 (gapWidth) */}
+                                        {(cut.type === 'ring_double' || cut.type === 'ring_triple') && (
+                                            <div className="flex flex-col gap-1 col-span-2">
+                                                <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase">
+                                                    <span>カット間</span>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05}
+                                                        value={cut.properties.gapWidth ?? ((cut.properties.pitch || 1.0) * (cut.type === 'ring_double' ? 0.15 : 0.1))}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            updateCut(cut.id, {
+                                                                properties: { ...cut.properties, gapWidth: val }
+                                                            });
+                                                        }}
+                                                        className="w-10 p-0.5 text-right bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min={0.05} max={(cut.properties.pitch || 1.0) * 0.5} step={0.05}
+                                                    value={cut.properties.gapWidth ?? ((cut.properties.pitch || 1.0) * (cut.type === 'ring_double' ? 0.15 : 0.1))}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        updateCut(cut.id, {
+                                                            properties: { ...cut.properties, gapWidth: val }
+                                                        });
+                                                    }}
+                                                    className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Wing: ストレート (flatWidth) */}
+                                        {cut.type === 'wing' && (
+                                            <div className="flex flex-col gap-1 col-span-2 border-t border-dashed border-zinc-200 mt-2 pt-2">
+                                                <div className="flex justify-between items-center text-[10px] text-zinc-500 uppercase">
+                                                    <span>ストレート</span>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05}
+                                                        value={cut.properties.flatWidth ?? (cut.properties.pitch || 1.0) * 0.3}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            updateCut(cut.id, {
+                                                                properties: { ...cut.properties, flatWidth: val }
+                                                            });
+                                                        }}
+                                                        className="w-10 p-0.5 text-right bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min={0} max={(cut.properties.pitch || 1.0) * 0.9} step={0.05}
+                                                    value={cut.properties.flatWidth ?? (cut.properties.pitch || 1.0) * 0.3}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        updateCut(cut.id, {
+                                                            properties: { ...cut.properties, flatWidth: val }
+                                                        });
+                                                    }}
+                                                    className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
