@@ -8,10 +8,12 @@ export const saveToLocalStorage = (state: Partial<BarrelState>) => {
         maxDiameter: state.maxDiameter,
         cuts: state.cuts,
         materialDensity: state.materialDensity,
-        frontTaperLength: state.frontTaperLength, // Ensure these are saved
+        frontTaperLength: state.frontTaperLength,
         rearTaperLength: state.rearTaperLength,
         holeDepthFront: state.holeDepthFront,
-        holeDepthRear: state.holeDepthRear
+        holeDepthRear: state.holeDepthRear,
+        outline: state.outline,
+        shapeType: state.shapeType,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
@@ -37,6 +39,8 @@ export const exportToJson = (state: Partial<BarrelState>, filename: string = 'my
         rearTaperLength: state.rearTaperLength,
         holeDepthFront: state.holeDepthFront,
         holeDepthRear: state.holeDepthRear,
+        outline: state.outline,
+        shapeType: state.shapeType,
         timestamp: new Date().toISOString()
     };
 
@@ -52,18 +56,59 @@ export const exportToJson = (state: Partial<BarrelState>, filename: string = 'my
     URL.revokeObjectURL(url);
 };
 
+const isFiniteNumber = (v: unknown): v is number =>
+    typeof v === 'number' && Number.isFinite(v);
+
+export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
+    if (typeof json !== 'object' || json === null) {
+        throw new Error('Invalid data: not an object');
+    }
+
+    const raw = json as Record<string, unknown>;
+    const result: Partial<BarrelState> = {};
+
+    if (isFiniteNumber(raw.length) && raw.length > 0) result.length = raw.length;
+    if (isFiniteNumber(raw.maxDiameter) && raw.maxDiameter > 0) result.maxDiameter = raw.maxDiameter;
+    if (isFiniteNumber(raw.materialDensity) && raw.materialDensity > 0) result.materialDensity = raw.materialDensity;
+    if (isFiniteNumber(raw.frontTaperLength) && raw.frontTaperLength >= 0) result.frontTaperLength = raw.frontTaperLength;
+    if (isFiniteNumber(raw.rearTaperLength) && raw.rearTaperLength >= 0) result.rearTaperLength = raw.rearTaperLength;
+    if (isFiniteNumber(raw.holeDepthFront) && raw.holeDepthFront >= 0) result.holeDepthFront = raw.holeDepthFront;
+    if (isFiniteNumber(raw.holeDepthRear) && raw.holeDepthRear >= 0) result.holeDepthRear = raw.holeDepthRear;
+
+    if (typeof raw.shapeType === 'string' && ['torpedo', 'straight', 'custom'].includes(raw.shapeType)) {
+        result.shapeType = raw.shapeType as BarrelState['shapeType'];
+    }
+
+    if (Array.isArray(raw.outline)) {
+        result.outline = raw.outline.filter(
+            (p): p is { z: number; d: number } =>
+                typeof p === 'object' && p !== null && isFiniteNumber(p.z) && isFiniteNumber(p.d)
+        );
+    }
+
+    if (Array.isArray(raw.cuts)) {
+        result.cuts = raw.cuts.filter((c): c is BarrelState['cuts'][number] =>
+            typeof c === 'object' && c !== null &&
+            typeof c.id === 'string' && typeof c.type === 'string' &&
+            isFiniteNumber(c.startZ) && isFiniteNumber(c.endZ)
+        );
+    }
+
+    return result;
+};
+
 export const importFromJson = (file: File): Promise<Partial<BarrelState>> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
                 const json = JSON.parse(e.target?.result as string);
-                // Basic validation could be added here
-                resolve(json);
+                resolve(validateBarrelData(json));
             } catch (err) {
                 reject(err);
             }
         };
+        reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsText(file);
     });
 };

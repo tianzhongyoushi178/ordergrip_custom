@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 
+export const HOLE_RADIUS_MM = 2.1;
+export const HOLE_RADIUS_CM = HOLE_RADIUS_MM / 10;
+
 export interface PhysicsData {
     volume: number; // cm3
     weight: number; // g
@@ -41,8 +44,7 @@ export const calculatePhysics = (points: THREE.Vector2[], density: number, holeD
         momentZ += dv * zc;
     }
 
-    // 2BA Hole Radius approx 2.1mm -> 0.21cm
-    const holeRadCm = 0.21;
+    const holeRadCm = HOLE_RADIUS_CM;
     const holeArea = Math.PI * holeRadCm * holeRadCm;
 
     // Front Hole Volume
@@ -64,7 +66,7 @@ export const calculatePhysics = (points: THREE.Vector2[], density: number, holeD
     // New Volume = V_solid - V_front - V_rear
     // New Moment = M_solid - (V_front * C_front) - (V_rear * C_rear)
 
-    const finalVolume = volume - frontHoleVol - rearHoleVol;
+    const finalVolume = Math.max(0, volume - frontHoleVol - rearHoleVol);
     const finalMoment = momentZ - (frontHoleVol * frontHoleCoG) - (rearHoleVol * rearHoleCoG);
 
     const weight = Math.max(0, finalVolume * density);

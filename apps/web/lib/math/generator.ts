@@ -23,9 +23,9 @@ export const generateProfile = (
     // Sort outline points by Z just in case
     const sortedOutline = [...outline].sort((a, b) => a.z - b.z);
 
-    for (let z = 0; z <= length; z += resolution) {
-        // Ensure we hit the exact end
-        if (z > length) z = length;
+    const steps = Math.ceil(length / resolution);
+    for (let i = 0; i <= steps; i++) {
+        const z = i === steps ? length : i * resolution;
 
         let r = baseRadius;
 
@@ -40,11 +40,9 @@ export const generateProfile = (
             } else if (z >= sortedOutline[sortedOutline.length - 1].z) {
                 r = sortedOutline[sortedOutline.length - 1].d / 2;
             } else {
-                // Find index
-                // Optimization: could track index, but loop is cheap for <100 points
-                for (let i = 0; i < sortedOutline.length - 1; i++) {
-                    const p1 = sortedOutline[i];
-                    const p2 = sortedOutline[i + 1];
+                for (let k = 0; k < sortedOutline.length - 1; k++) {
+                    const p1 = sortedOutline[k];
+                    const p2 = sortedOutline[k + 1];
                     if (z >= p1.z && z <= p2.z) {
                         const ratio = (z - p1.z) / (p2.z - p1.z);
                         const d = p1.d + (p2.d - p1.d) * ratio;
@@ -216,8 +214,6 @@ export const generateProfile = (
         if (r < 0.5) r = 0.5;
 
         points.push(new THREE.Vector2(r, z));
-
-        if (z === length) break;
     }
 
     return points;
