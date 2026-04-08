@@ -80,7 +80,20 @@ export const generateProfile = (
 
                 // factor: 0.0 to 1.0 (0=Start of pitch, 1=End of pitch)
                 const cycle = localZ % pitch;
-                const factor = cycle / pitch; // 0.0 -> 1.0
+                const rawFactor = cycle / pitch; // 0.0 -> 1.0
+
+                // For non-groove types, support active width (cutWidth < pitch = flat land after pattern)
+                const isGrooveType = cut.type === 'ring' || cut.type === 'micro'
+                    || cut.type === 'ring_double' || cut.type === 'ring_triple';
+                let factor = rawFactor;
+                if (!isGrooveType) {
+                    const activeWidth = cut.properties.cutWidth;
+                    if (activeWidth !== undefined && activeWidth < pitch) {
+                        const activeFraction = activeWidth / pitch;
+                        if (rawFactor >= activeFraction) continue; // flat land area
+                        factor = rawFactor / activeFraction; // remap to 0..1
+                    }
+                }
 
                 switch (cut.type) {
                     case 'ring':
