@@ -93,7 +93,26 @@ export const Scene = () => {
             </group>
 
             <ContactShadows resolution={1024} scale={20} blur={1} opacity={0.5} far={10} color="#000000" />
-            <OrbitControls ref={controlsRef} makeDefault target={[0, 0, 0]} />
+            <OrbitControls
+                ref={controlsRef}
+                makeDefault
+                target={[0, 0, 0]}
+                // 慣性付きスムーズ回転
+                enableDamping
+                dampingFactor={0.12}
+                // 回転速度（モバイルはやや遅め）
+                rotateSpeed={isMobile ? 0.6 : 0.8}
+                // パン速度
+                panSpeed={0.8}
+                // ズーム制限（近すぎ/遠すぎ防止）
+                minDistance={15}
+                maxDistance={200}
+                // 上下回転制限（裏返り防止）
+                minPolarAngle={Math.PI * 0.05}
+                maxPolarAngle={Math.PI * 0.95}
+                // タッチ操作: 1本指=回転、2本指=パン＆ズーム
+                touches={{ ONE: 0 /* ROTATE */, TWO: 2 /* DOLLY_PAN */ }}
+            />
         </Canvas>
     );
 };
