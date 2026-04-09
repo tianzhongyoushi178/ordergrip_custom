@@ -67,7 +67,7 @@ export const generateProfile = (
 
         // 2. Apply Cuts
         for (const cut of cuts) {
-            if (z >= cut.startZ && z <= cut.endZ) {
+            if (z >= cut.startZ && z < cut.endZ) {
                 const depth = cut.properties.depth || 0.5;
                 const pitch = cut.properties.pitch || 1.0;
 
