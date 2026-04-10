@@ -187,32 +187,28 @@ export const generateProfile = (
                         break;
 
                     case 'step':
-                        // Stairs down |¯-_|
-                        // 0-0.33: High (0 depth)
-                        // 0.33-0.66: Mid (0.5 depth)
-                        // 0.66-1.0: Low (1.0 depth) -> Invalid usually implies cutting IN.
-                        // Let's invert: |__--| 2-levels?
-                        // Let's do: Deep(40%) - Mid(30%) - Land(30%)
-                        if (factor < 0.4) {
+                        // Land → Mid → Deep（前→後方向で段差が掛かる）
+                        // |  --|__| 段差カット
+                        if (factor < 0.3) {
+                            // Land（削りなし）
+                        } else if (factor < 0.6) {
+                            r -= depth * 0.5; // Mid step
+                        } else {
                             r -= depth; // Deep
-                        } else if (factor < 0.7) {
-                            r -= depth * 0.5; // Mid
                         }
-                        // else Land
                         break;
 
                     case 'stair':
-                        // Ascending staircase with smooth ramp transitions
-                        // Ramp(20%) + Flat(30%) + Ramp(20%) + Flat(30%)
+                        // ステップの両方向版: 前後どちらからも掛かる対称形
+                        // Ramp down → Deep → Ramp up → Land
                         if (factor < 0.2) {
-                            r -= depth * 0.5 * (factor / 0.2); // Ramp to step 1
+                            r -= depth * (factor / 0.2); // Ramp down
                         } else if (factor < 0.5) {
-                            r -= depth * 0.5; // Step 1 flat
+                            r -= depth; // Deep flat
                         } else if (factor < 0.7) {
-                            r -= depth * (0.5 + 0.5 * ((factor - 0.5) / 0.2)); // Ramp to step 2
-                        } else {
-                            r -= depth; // Step 2 flat
+                            r -= depth * (1 - (factor - 0.5) / 0.2); // Ramp up
                         }
+                        // 0.7-1.0: Land
                         break;
 
                     default:
@@ -345,15 +341,27 @@ export const generateBarrelGeometry = (
 
             // Apply modifications based on surface
             if (isOuterSurface) {
-                // Vertical Cuts Logic
+                // Vertical Cuts Logic — フラット底の縦溝
                 for (const vCut of verticalCuts) {
-                    if (y >= vCut.startZ && y <= vCut.endZ) {
+                    if (y >= vCut.startZ && y < vCut.endZ) {
                         const count = vCut.properties.itemCount || 12;
-                        const depth = vCut.properties.depth || 0.5;
+                        const vDepth = vCut.properties.depth || 0.5;
                         const segmentRad = (Math.PI * 2) / count;
                         const localTheta = (theta % segmentRad) / segmentRad;
-                        const wave = 1 - 2 * Math.abs(localTheta - 0.5);
-                        rMod = Math.max(rMod, depth * wave);
+                        // 溝50% / ランド50%、エッジに緩やかな傾斜
+                        const grooveFraction = 0.5;
+                        const edgeWidth = 0.08; // エッジの滑らかさ
+                        if (localTheta < edgeWidth) {
+                            // ランド→溝のスムーズ遷移
+                            rMod = Math.max(rMod, vDepth * (localTheta / edgeWidth));
+                        } else if (localTheta < grooveFraction - edgeWidth) {
+                            // 溝の底（フラット）
+                            rMod = Math.max(rMod, vDepth);
+                        } else if (localTheta < grooveFraction) {
+                            // 溝→ランドのスムーズ遷移
+                            rMod = Math.max(rMod, vDepth * ((grooveFraction - localTheta) / edgeWidth));
+                        }
+                        // grooveFraction以降はランド（rMod=0）
                     }
                 }
             } else if (isInnerHole) {
