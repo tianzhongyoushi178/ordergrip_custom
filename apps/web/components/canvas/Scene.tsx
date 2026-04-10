@@ -102,8 +102,9 @@ export const Scene = () => {
                 dampingFactor={0.12}
                 // 回転速度（モバイルはやや遅め）
                 rotateSpeed={isMobile ? 0.6 : 0.8}
-                // パン速度
+                // パン速度・スクリーン空間パン（画面方向に直感的に移動）
                 panSpeed={0.8}
+                screenSpacePanning
                 // ズーム制限（近すぎ/遠すぎ防止）
                 minDistance={15}
                 maxDistance={200}

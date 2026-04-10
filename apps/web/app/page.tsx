@@ -32,6 +32,17 @@ export default function Home() {
         <Scene />
       </div>
 
+      {/* 操作ガイド */}
+      <div className="absolute bottom-2 left-4 md:bottom-4 md:left-6 z-10 pointer-events-none select-none hidden md:flex gap-3 text-[10px] text-zinc-400">
+        <span>左ドラッグ: 回転</span>
+        <span>右ドラッグ: 移動</span>
+        <span>スクロール: ズーム</span>
+      </div>
+      <div className="absolute top-[38vh] left-4 z-10 pointer-events-none select-none flex md:hidden gap-3 text-[10px] text-zinc-400">
+        <span>1本指: 回転</span>
+        <span>2本指: 移動&amp;ズーム</span>
+      </div>
+
       {/* UI Overlay */}
       {/* Editor component handles its own sizing (h-50vh on mobile, absolute sidebar on desktop) */}
       <Editor />
