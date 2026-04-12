@@ -536,92 +536,109 @@ export const Editor = () => {
 
                                     {/* メインパラメータ 2x2 グリッド */}
                                     <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50">
-                                        {/* 溝幅 */}
-                                        <div>
-                                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-                                                <span>溝幅</span>
-                                                <span className="text-zinc-400">mm</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                step={0.05} min={0.05} max={5.0}
-                                                value={parseFloat(curCutWidth.toFixed(2))}
-                                                onChange={(e) => {
-                                                    if (isVertical) return;
-                                                    updateDerived(parseFloat(e.target.value), curSpacing, curCount);
-                                                }}
-                                                disabled={isVertical}
-                                                className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded disabled:opacity-40"
-                                            />
-                                        </div>
-
-                                        {/* 溝深さ */}
-                                        <div>
-                                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-                                                <span>溝深さ</span>
-                                                <span className="text-zinc-400">mm</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                step={0.05} min={0.05} max={1.5}
-                                                value={parseFloat(curDepth.toFixed(2))}
-                                                onChange={(e) => {
-                                                    updateCut(cut.id, {
-                                                        properties: { ...cut.properties, depth: parseFloat(e.target.value) }
-                                                    });
-                                                }}
-                                                className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
-                                            />
-                                        </div>
-
-                                        {/* 溝間隔 */}
-                                        <div>
-                                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-                                                <span>溝間隔</span>
-                                                <span className="text-zinc-400">mm</span>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                step={0.05} min={0} max={5.0}
-                                                value={parseFloat(curSpacing.toFixed(2))}
-                                                onChange={(e) => {
-                                                    if (isVertical) return;
-                                                    updateDerived(curCutWidth, parseFloat(e.target.value), curCount);
-                                                }}
-                                                disabled={isVertical}
-                                                className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded disabled:opacity-40"
-                                            />
-                                        </div>
-
-                                        {/* カット数 */}
-                                        <div>
-                                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-                                                <span>{isVertical ? '本数' : 'カット数'}</span>
-                                            </div>
-                                            {isVertical ? (
-                                                <input
-                                                    type="number"
-                                                    step={1} min={3} max={32}
-                                                    value={cut.properties.itemCount || 12}
-                                                    onChange={(e) => {
-                                                        updateCut(cut.id, {
-                                                            properties: { ...cut.properties, itemCount: parseInt(e.target.value) }
-                                                        });
-                                                    }}
-                                                    className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
-                                                />
-                                            ) : (
-                                                <input
-                                                    type="number"
-                                                    step={1} min={1} max={50}
-                                                    value={curCount}
-                                                    onChange={(e) => {
-                                                        updateDerived(curCutWidth, curSpacing, parseInt(e.target.value));
-                                                    }}
-                                                    className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
-                                                />
-                                            )}
-                                        </div>
+                                        {isVertical ? (
+                                            <>
+                                                {/* 縦カット: 本数 + 溝深さ */}
+                                                <div>
+                                                    <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                        <span>本数</span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        step={1} min={3} max={32}
+                                                        value={cut.properties.itemCount || 12}
+                                                        onChange={(e) => {
+                                                            updateCut(cut.id, {
+                                                                properties: { ...cut.properties, itemCount: parseInt(e.target.value) }
+                                                            });
+                                                        }}
+                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                        <span>溝深さ</span>
+                                                        <span className="text-zinc-400">mm</span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05} min={0.05} max={1.5}
+                                                        value={parseFloat(curDepth.toFixed(2))}
+                                                        onChange={(e) => {
+                                                            updateCut(cut.id, {
+                                                                properties: { ...cut.properties, depth: parseFloat(e.target.value) }
+                                                            });
+                                                        }}
+                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                {/* 通常カット: 溝幅 / 溝深さ / 溝間隔 / カット数 */}
+                                                <div>
+                                                    <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                        <span>溝幅</span>
+                                                        <span className="text-zinc-400">mm</span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05} min={0.05} max={5.0}
+                                                        value={parseFloat(curCutWidth.toFixed(2))}
+                                                        onChange={(e) => {
+                                                            updateDerived(parseFloat(e.target.value), curSpacing, curCount);
+                                                        }}
+                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                        <span>溝深さ</span>
+                                                        <span className="text-zinc-400">mm</span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05} min={0.05} max={1.5}
+                                                        value={parseFloat(curDepth.toFixed(2))}
+                                                        onChange={(e) => {
+                                                            updateCut(cut.id, {
+                                                                properties: { ...cut.properties, depth: parseFloat(e.target.value) }
+                                                            });
+                                                        }}
+                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                        <span>溝間隔</span>
+                                                        <span className="text-zinc-400">mm</span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        step={0.05} min={0} max={5.0}
+                                                        value={parseFloat(curSpacing.toFixed(2))}
+                                                        onChange={(e) => {
+                                                            updateDerived(curCutWidth, parseFloat(e.target.value), curCount);
+                                                        }}
+                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                        <span>カット数</span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        step={1} min={1} max={50}
+                                                        value={curCount}
+                                                        onChange={(e) => {
+                                                            updateDerived(curCutWidth, curSpacing, parseInt(e.target.value));
+                                                        }}
+                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
 
                                     {/* --- 追加パラメータ --- */}
@@ -664,9 +681,10 @@ export const Editor = () => {
                                             />
                                         </div>
                                     )}
-                                    {/* Vertical: 開始〜終了位置 */}
+                                    {/* Vertical: 追加パラメータ */}
                                     {isVertical && (
-                                        <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50">
+                                        <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50 space-y-3">
+                                            {/* 終了位置（溝長さ） */}
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs w-16 text-zinc-500 shrink-0">終了位置</span>
                                                 <input
@@ -683,6 +701,54 @@ export const Editor = () => {
                                                     onChange={(e) => updateCut(cut.id, { endZ: parseFloat(e.target.value) })}
                                                     className="w-14 p-1 text-right text-xs bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
                                                 />
+                                            </div>
+
+                                            {/* 溝幅比率 */}
+                                            <div>
+                                                <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                    <span>溝幅比率</span>
+                                                    <span className="text-zinc-400">{Math.round((cut.properties.grooveFraction ?? 0.5) * 100)}%</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min={0.1} max={0.9} step={0.05}
+                                                    value={cut.properties.grooveFraction ?? 0.5}
+                                                    onChange={(e) => {
+                                                        updateCut(cut.id, {
+                                                            properties: { ...cut.properties, grooveFraction: parseFloat(e.target.value) }
+                                                        });
+                                                    }}
+                                                    className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                                />
+                                            </div>
+
+                                            {/* 底形状 */}
+                                            <div>
+                                                <div className="text-[10px] text-zinc-500 mb-1">底形状</div>
+                                                <div className="grid grid-cols-3 gap-1">
+                                                    {([
+                                                        { value: 'flat' as const, label: 'フラット', icon: '▬' },
+                                                        { value: 'v' as const, label: 'V字', icon: 'V' },
+                                                        { value: 'round' as const, label: '丸底', icon: 'U' },
+                                                    ]).map(shape => (
+                                                        <button
+                                                            key={shape.value}
+                                                            onClick={() => {
+                                                                updateCut(cut.id, {
+                                                                    properties: { ...cut.properties, bottomShape: shape.value }
+                                                                });
+                                                            }}
+                                                            className={`py-1.5 rounded text-xs font-bold transition-all ${
+                                                                (cut.properties.bottomShape ?? 'flat') === shape.value
+                                                                    ? 'bg-indigo-600 text-white'
+                                                                    : 'bg-white dark:bg-zinc-900 text-zinc-500 border border-zinc-200 dark:border-zinc-700 hover:border-indigo-400'
+                                                            }`}
+                                                        >
+                                                            <span className="block text-base leading-none mb-0.5">{shape.icon}</span>
+                                                            {shape.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
                                     )}

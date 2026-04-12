@@ -19,6 +19,8 @@ export interface CutZone {
     cutWidth?: number;  // 溝の幅 mm (ring系用)
     gapWidth?: number;  // カット間 mm (double/triple用)
     flatWidth?: number; // 頂点ストレート長さ mm (wing用)
+    grooveFraction?: number; // 縦カット溝幅比率 (0.1〜0.9, default 0.5)
+    bottomShape?: 'flat' | 'v' | 'round'; // 縦カット底形状
   }
 }
 

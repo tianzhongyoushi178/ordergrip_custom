@@ -341,27 +341,43 @@ export const generateBarrelGeometry = (
 
             // Apply modifications based on surface
             if (isOuterSurface) {
-                // Vertical Cuts Logic — フラット底の縦溝
+                // Vertical Cuts Logic — 縦溝（幅・底形状・長さ指定可能）
                 for (const vCut of verticalCuts) {
                     if (y >= vCut.startZ && y < vCut.endZ) {
                         const count = vCut.properties.itemCount || 12;
                         const vDepth = vCut.properties.depth || 0.5;
+                        const grooveFraction = vCut.properties.grooveFraction ?? 0.5;
+                        const bottomShape = vCut.properties.bottomShape ?? 'flat';
                         const segmentRad = (Math.PI * 2) / count;
                         const localTheta = (theta % segmentRad) / segmentRad;
-                        // 溝50% / ランド50%、エッジに緩やかな傾斜
-                        const grooveFraction = 0.5;
-                        const edgeWidth = 0.08; // エッジの滑らかさ
-                        if (localTheta < edgeWidth) {
-                            // ランド→溝のスムーズ遷移
-                            rMod = Math.max(rMod, vDepth * (localTheta / edgeWidth));
-                        } else if (localTheta < grooveFraction - edgeWidth) {
-                            // 溝の底（フラット）
-                            rMod = Math.max(rMod, vDepth);
-                        } else if (localTheta < grooveFraction) {
-                            // 溝→ランドのスムーズ遷移
-                            rMod = Math.max(rMod, vDepth * ((grooveFraction - localTheta) / edgeWidth));
+
+                        if (localTheta < grooveFraction) {
+                            // 溝内の位置 (0=溝端, 0.5=中央, 1=溝端)
+                            const gf = localTheta / grooveFraction; // 0..1
+                            const edgeWidth = 0.1; // エッジ遷移幅（溝幅に対する比率）
+                            // エッジスムーズ係数 (0→1→1→0)
+                            let edgeFade = 1;
+                            if (gf < edgeWidth) edgeFade = gf / edgeWidth;
+                            else if (gf > 1 - edgeWidth) edgeFade = (1 - gf) / edgeWidth;
+
+                            let depthFactor: number;
+                            switch (bottomShape) {
+                                case 'v':
+                                    // V字: 中央が最深
+                                    depthFactor = 1 - 2 * Math.abs(gf - 0.5);
+                                    break;
+                                case 'round':
+                                    // U字/丸底: sin曲線
+                                    depthFactor = Math.sin(gf * Math.PI);
+                                    break;
+                                case 'flat':
+                                default:
+                                    // フラット底 + エッジ遷移
+                                    depthFactor = edgeFade;
+                                    break;
+                            }
+                            rMod = Math.max(rMod, vDepth * depthFactor);
                         }
-                        // grooveFraction以降はランド（rMod=0）
                     }
                 }
             } else if (isInnerHole) {
