@@ -3,11 +3,43 @@
 import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
 import { calculatePhysics } from '@/lib/math/physics';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { saveToLocalStorage, loadFromLocalStorage, exportToJson } from '@/lib/storage/local';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
 import { CutSelector } from './CutSelector';
+
+/** 数値入力: フォーカス中はローカルstate、blur/Enterで確定 */
+const NumInput = ({ value, onChange, className, ...rest }: {
+    value: number;
+    onChange: (v: number) => void;
+    className?: string;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) => {
+    const [local, setLocal] = useState<string | null>(null);
+    const ref = useRef<HTMLInputElement>(null);
+
+    const commit = useCallback(() => {
+        if (local === null) return;
+        const parsed = parseFloat(local);
+        if (!isNaN(parsed)) onChange(parsed);
+        setLocal(null);
+    }, [local, onChange]);
+
+    return (
+        <input
+            ref={ref}
+            type="text"
+            inputMode="decimal"
+            className={className}
+            value={local ?? (Number.isInteger(value) ? String(value) : parseFloat(value.toFixed(2)).toString())}
+            onFocus={() => setLocal(Number.isInteger(value) ? String(value) : parseFloat(value.toFixed(2)).toString())}
+            onChange={(e) => setLocal(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => { if (e.key === 'Enter') { commit(); ref.current?.blur(); } }}
+            {...rest}
+        />
+    );
+};
 
 // Simple implementation without extra deps for now
 export const Editor = () => {
@@ -543,15 +575,9 @@ export const Editor = () => {
                                                     <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                                                         <span>本数</span>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        step={1} min={3} max={32}
+                                                    <NumInput
                                                         value={cut.properties.itemCount || 12}
-                                                        onChange={(e) => {
-                                                            updateCut(cut.id, {
-                                                                properties: { ...cut.properties, itemCount: parseInt(e.target.value) }
-                                                            });
-                                                        }}
+                                                        onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, itemCount: Math.round(v) } })}
                                                         className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                                     />
                                                 </div>
@@ -560,15 +586,9 @@ export const Editor = () => {
                                                         <span>溝深さ</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        step={0.05} min={0.05} max={1.5}
-                                                        value={parseFloat(curDepth.toFixed(2))}
-                                                        onChange={(e) => {
-                                                            updateCut(cut.id, {
-                                                                properties: { ...cut.properties, depth: parseFloat(e.target.value) }
-                                                            });
-                                                        }}
+                                                    <NumInput
+                                                        value={curDepth}
+                                                        onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, depth: v } })}
                                                         className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                                     />
                                                 </div>
@@ -581,13 +601,9 @@ export const Editor = () => {
                                                         <span>溝幅</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        step={0.05} min={0.05} max={5.0}
-                                                        value={parseFloat(curCutWidth.toFixed(2))}
-                                                        onChange={(e) => {
-                                                            updateDerived(parseFloat(e.target.value), curSpacing, curCount);
-                                                        }}
+                                                    <NumInput
+                                                        value={curCutWidth}
+                                                        onChange={(v) => updateDerived(v, curSpacing, curCount)}
                                                         className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                                     />
                                                 </div>
@@ -596,15 +612,9 @@ export const Editor = () => {
                                                         <span>溝深さ</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        step={0.05} min={0.05} max={1.5}
-                                                        value={parseFloat(curDepth.toFixed(2))}
-                                                        onChange={(e) => {
-                                                            updateCut(cut.id, {
-                                                                properties: { ...cut.properties, depth: parseFloat(e.target.value) }
-                                                            });
-                                                        }}
+                                                    <NumInput
+                                                        value={curDepth}
+                                                        onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, depth: v } })}
                                                         className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                                     />
                                                 </div>
@@ -613,13 +623,9 @@ export const Editor = () => {
                                                         <span>溝間隔</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        step={0.05} min={0} max={5.0}
-                                                        value={parseFloat(curSpacing.toFixed(2))}
-                                                        onChange={(e) => {
-                                                            updateDerived(curCutWidth, parseFloat(e.target.value), curCount);
-                                                        }}
+                                                    <NumInput
+                                                        value={curSpacing}
+                                                        onChange={(v) => updateDerived(curCutWidth, v, curCount)}
                                                         className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                                     />
                                                 </div>
@@ -627,13 +633,9 @@ export const Editor = () => {
                                                     <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                                                         <span>カット数</span>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        step={1} min={1} max={50}
+                                                    <NumInput
                                                         value={curCount}
-                                                        onChange={(e) => {
-                                                            updateDerived(curCutWidth, curSpacing, parseInt(e.target.value));
-                                                        }}
+                                                        onChange={(v) => updateDerived(curCutWidth, curSpacing, Math.round(v))}
                                                         className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                                     />
                                                 </div>
@@ -649,14 +651,9 @@ export const Editor = () => {
                                                 <span>サブ溝間隔</span>
                                                 <span className="text-zinc-400">mm</span>
                                             </div>
-                                            <input
-                                                type="number"
-                                                step={0.05} min={0.05} max={2.0}
-                                                value={parseFloat((cut.properties.gapWidth ?? 0.1).toFixed(2))}
-                                                onChange={(e) => {
-                                                    const gw = parseFloat(e.target.value);
-                                                    updateDerived(curCutWidth, curSpacing, curCount, { gapWidth: gw });
-                                                }}
+                                            <NumInput
+                                                value={cut.properties.gapWidth ?? 0.1}
+                                                onChange={(v) => updateDerived(curCutWidth, curSpacing, curCount, { gapWidth: v })}
                                                 className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                             />
                                         </div>
@@ -668,15 +665,9 @@ export const Editor = () => {
                                                 <span>頂点ストレート</span>
                                                 <span className="text-zinc-400">mm</span>
                                             </div>
-                                            <input
-                                                type="number"
-                                                step={0.05} min={0} max={curCutWidth * 0.9}
-                                                value={parseFloat((cut.properties.flatWidth ?? curCutWidth * 0.3).toFixed(2))}
-                                                onChange={(e) => {
-                                                    updateCut(cut.id, {
-                                                        properties: { ...cut.properties, flatWidth: parseFloat(e.target.value) }
-                                                    });
-                                                }}
+                                            <NumInput
+                                                value={cut.properties.flatWidth ?? curCutWidth * 0.3}
+                                                onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, flatWidth: v } })}
                                                 className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                             />
                                         </div>
@@ -694,11 +685,9 @@ export const Editor = () => {
                                                     onChange={(e) => updateCut(cut.id, { endZ: parseFloat(e.target.value) })}
                                                     className="flex-1 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-500"
                                                 />
-                                                <input
-                                                    type="number"
-                                                    value={cut.endZ.toFixed(1)}
-                                                    step={0.5}
-                                                    onChange={(e) => updateCut(cut.id, { endZ: parseFloat(e.target.value) })}
+                                                <NumInput
+                                                    value={cut.endZ}
+                                                    onChange={(v) => updateCut(cut.id, { endZ: v })}
                                                     className="w-14 p-1 text-right text-xs bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
                                                 />
                                             </div>
