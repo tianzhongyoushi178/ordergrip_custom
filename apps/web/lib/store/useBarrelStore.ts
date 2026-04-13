@@ -18,7 +18,6 @@ export interface CutZone {
     itemCount?: number; // For vertical cuts (number of cuts along circumference)
     cutWidth?: number;  // 溝の幅 mm (ring系用)
     gapWidth?: number;  // カット間 mm (double/triple用)
-    flatWidth?: number; // 頂点ストレート長さ mm (wing用)
     grooveFraction?: number; // 縦カット溝幅比率 (0.1〜0.9, default 0.5)
     bottomShape?: 'flat' | 'v' | 'round'; // 縦カット底形状
   }
@@ -63,6 +62,10 @@ export interface BarrelState {
   // Camera Control
   cameraResetTrigger: number;
   triggerCameraReset: () => void;
+
+  // Active Cut (3Dハイライト用)
+  activeCutId: string | null;
+  setActiveCutId: (id: string | null) => void;
 }
 
 export const useBarrelStore = create<BarrelState>((set) => ({
@@ -106,4 +109,7 @@ export const useBarrelStore = create<BarrelState>((set) => ({
 
   cameraResetTrigger: 0,
   triggerCameraReset: () => set((state) => ({ cameraResetTrigger: state.cameraResetTrigger + 1 })),
+
+  activeCutId: null,
+  setActiveCutId: (id) => set({ activeCutId: id }),
 }));

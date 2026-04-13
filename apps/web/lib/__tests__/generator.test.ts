@@ -283,24 +283,23 @@ describe('generateProfile', () => {
       expect(withoutCut[landIdx].x - withCut[landIdx].x).toBeCloseTo(0, 1);
     });
 
-    it('wingカット: テーパー部は深く、フラット部は深さ0', () => {
+    it('wingカット: 曲線テーパーで始点が最も深い', () => {
       const cuts = [baseCut('wing', {
-        properties: { pitch: 4.0, depth: 0.5, flatWidth: 1.2 },
+        properties: { pitch: 4.0, depth: 0.5 },
       })];
       const withCut = generateProfile(45, 7.0, cuts, 10, 10);
       const withoutCut = generateProfile(45, 7.0, [], 10, 10);
 
-      // flatWidth=1.2, pitch=4.0 → taperR = 1 - 1.2/4 = 0.7
-      // z=15.0, factor=0 → depth*(1-0/0.7)=0.5 (最大深さ)
+      // factor=0 → depth*(1-0^0.6)=0.5 (最大深さ)
       const startIdx = withCut.findIndex(p => Math.abs(p.y - 15.0) < 0.06);
       expect(startIdx).toBeGreaterThanOrEqual(0);
       expect(withoutCut[startIdx].x - withCut[startIdx].x).toBeGreaterThan(0.3);
 
-      // factor=0.9 → flat zone (no cut)
-      // z=15.0 + 0.9*4.0 = 18.6
-      const flatIdx = withCut.findIndex(p => Math.abs(p.y - 18.6) < 0.06);
-      expect(flatIdx).toBeGreaterThanOrEqual(0);
-      expect(withoutCut[flatIdx].x - withCut[flatIdx].x).toBeCloseTo(0, 1);
+      // factor≈1 → depth*(1-1^0.6)≈0 (ほぼ深さ0)
+      // z=15.0 + 0.95*4.0 = 18.8
+      const endIdx = withCut.findIndex(p => Math.abs(p.y - 18.8) < 0.06);
+      expect(endIdx).toBeGreaterThanOrEqual(0);
+      expect(withoutCut[endIdx].x - withCut[endIdx].x).toBeLessThan(0.1);
     });
 
     it('stairカット: ランプ遷移付き2段', () => {

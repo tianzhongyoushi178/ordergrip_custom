@@ -48,7 +48,7 @@ export const Editor = () => {
         frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline,
         shapeType,
         updateDimension, updateShapeType, addCut, removeCut, updateCut,
-        setAll, setMaterialDensity
+        setAll, setMaterialDensity, activeCutId, setActiveCutId
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
@@ -107,7 +107,7 @@ export const Editor = () => {
 
     // --- Default cut properties per type ---
     // pitch≒2.0を基準に、初期状態でパターンの違いが視覚的にわかるサイズ
-    const defaultProps = (type: CutType): { cutWidth: number; depth: number; spacing: number; count: number; gapWidth?: number; flatWidth?: number; itemCount?: number } => {
+    const defaultProps = (type: CutType): { cutWidth: number; depth: number; spacing: number; count: number; gapWidth?: number; itemCount?: number } => {
         switch (type) {
             case 'ring':       return { cutWidth: 1.0, depth: 0.3, spacing: 1.0, count: 5 };
             case 'ring_double': return { cutWidth: 0.5, depth: 0.3, spacing: 0.6, count: 5, gapWidth: 0.4 };
@@ -116,7 +116,7 @@ export const Editor = () => {
             case 'ring_v':     return { cutWidth: 2.0, depth: 0.3, spacing: 0, count: 5 };
             case 'canyon':     return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'shark':      return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
-            case 'wing':       return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5, flatWidth: 0.6 };
+            case 'wing':       return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'step':       return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'stair':      return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'scallop':    return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
@@ -168,7 +168,6 @@ export const Editor = () => {
                 depth: d.depth,
                 cutWidth: d.cutWidth,
                 ...(d.gapWidth !== undefined && { gapWidth: d.gapWidth }),
-                ...(d.flatWidth !== undefined && { flatWidth: d.flatWidth }),
                 ...(d.itemCount !== undefined && { itemCount: d.itemCount }),
             }
         });
@@ -504,7 +503,17 @@ export const Editor = () => {
                             };
 
                             return (
-                            <div key={cut.id} className="p-3 border border-zinc-200 dark:border-zinc-700 rounded bg-zinc-50 dark:bg-zinc-800/50 relative group">
+                            <div
+                                key={cut.id}
+                                className={`p-3 border-2 rounded relative group transition-colors ${
+                                    activeCutId === cut.id
+                                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20'
+                                        : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50'
+                                }`}
+                                onPointerEnter={() => setActiveCutId(cut.id)}
+                                onPointerLeave={() => { if (activeCutId === cut.id) setActiveCutId(null); }}
+                                onFocusCapture={() => setActiveCutId(cut.id)}
+                            >
                                 <button
                                     onClick={() => removeCut(cut.id)}
                                     className="absolute top-2 right-2 text-zinc-400 hover:text-red-500"
@@ -654,20 +663,6 @@ export const Editor = () => {
                                             <NumInput
                                                 value={cut.properties.gapWidth ?? 0.1}
                                                 onChange={(v) => updateDerived(curCutWidth, curSpacing, curCount, { gapWidth: v })}
-                                                className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
-                                            />
-                                        </div>
-                                    )}
-                                    {/* Wing: ストレート (flatWidth) */}
-                                    {cut.type === 'wing' && (
-                                        <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50">
-                                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-                                                <span>頂点ストレート</span>
-                                                <span className="text-zinc-400">mm</span>
-                                            </div>
-                                            <NumInput
-                                                value={cut.properties.flatWidth ?? curCutWidth * 0.3}
-                                                onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, flatWidth: v } })}
                                                 className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
                                             />
                                         </div>

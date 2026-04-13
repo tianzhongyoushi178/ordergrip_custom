@@ -3,44 +3,60 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
-import { generateProfile, generateBarrelGeometry } from '@/lib/math/generator';
+import { generateBarrelGeometry } from '@/lib/math/generator';
+
+/** 操作中カットのハイライトバンド */
+const CutHighlight = ({ startZ, endZ, length, maxDiameter }: {
+    startZ: number; endZ: number; length: number; maxDiameter: number;
+}) => {
+    const bandLength = endZ - startZ;
+    const centerZ = (startZ + endZ) / 2 - length / 2; // centered coordinates
+    const radius = maxDiameter / 2 + 0.3; // slightly larger than barrel
+
+    return (
+        <mesh position={[0, 0, centerZ]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[radius, radius, bandLength, 32, 1, true]} />
+            <meshBasicMaterial
+                color="#6366f1"
+                transparent
+                opacity={0.25}
+                side={THREE.DoubleSide}
+                depthWrite={false}
+            />
+        </mesh>
+    );
+};
 
 export const Barrel = () => {
-    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline } = useBarrelStore();
-
-    // Debug log
-    // console.log('Barrel Render:', length, maxDiameter, cuts.length);
-
-    // const points = useMemo(() => {
-    //     return generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength);
-    // }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength]);
+    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, activeCutId } = useBarrelStore();
 
     const geometry = useMemo(() => {
         const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline);
-
-        // Rotate -90 deg around X to align with Z axis (standard depth).
-        // Our generator made Y-axis aligned (Lathe style).
         geom.rotateX(-Math.PI / 2);
-
-        // Center the geometry
-        // Generator makes vertices from y=0 to y=-length (check generator logic).
-        // Actually, my generator uses `vertices.push(-y)`. `y` goes 0 to length. So vertices go 0 to -length.
-        // To center it: Translate Z by -length/2.
-        // Original Z: 0 (Front) to length (Rear).
-        // New Z: -length/2 (Front) to length/2 (Rear).
         geom.translate(0, 0, -length / 2);
-
         return geom;
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline]);
 
+    const activeCut = activeCutId ? cuts.find(c => c.id === activeCutId) : null;
+
     return (
-        <mesh geometry={geometry} castShadow receiveShadow>
-            <meshStandardMaterial
-                color="#D1D5DB" // zinc-300
-                roughness={0.3}
-                metalness={0.8}
-                side={THREE.DoubleSide}
-            />
-        </mesh>
+        <group>
+            <mesh geometry={geometry} castShadow receiveShadow>
+                <meshStandardMaterial
+                    color="#D1D5DB"
+                    roughness={0.3}
+                    metalness={0.8}
+                    side={THREE.DoubleSide}
+                />
+            </mesh>
+            {activeCut && (
+                <CutHighlight
+                    startZ={activeCut.startZ}
+                    endZ={activeCut.endZ}
+                    length={length}
+                    maxDiameter={maxDiameter}
+                />
+            )}
+        </group>
     );
 };

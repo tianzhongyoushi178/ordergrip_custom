@@ -140,20 +140,13 @@ export const generateProfile = (
                         r -= depth * (1 - factor);
                         break;
 
-                    case 'wing': {
-                        // Shark + flat peak (taper → straight → steep wall)
-                        //       _____
-                        //      /     |  ← steep drop at pitch boundary
-                        //     /      |
-                        //    /       |
-                        const fw = Math.min(cut.properties.flatWidth ?? pitch * 0.3, pitch * 0.9);
-                        const taperR = 1 - fw / pitch;
-                        if (taperR > 0 && factor < taperR) {
-                            r -= depth * (1 - factor / taperR);
-                        }
-                        // else: flat peak (no cut)
+                    case 'wing':
+                        // 曲線テーパー（シャークより緩やかなカーブ）
+                        //      ╱|  ← steep drop at pitch boundary
+                        //    ╱  |
+                        //  ╱   |
+                        r -= depth * (1 - Math.pow(factor, 0.6));
                         break;
-                    }
 
                     case 'ring_v':
                         // V-shape \/
