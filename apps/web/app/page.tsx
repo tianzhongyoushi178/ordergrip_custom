@@ -7,11 +7,8 @@ import { useBarrelStore } from '@/lib/store/useBarrelStore';
 export default function Home() {
   return (
     <main className="flex flex-col md:block relative w-full h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
-      <div className="absolute top-4 left-6 z-10 pointer-events-none select-none">
-        <h1 className="text-xl font-black tracking-tighter text-zinc-900 dark:text-zinc-50">
-          BARREL <span className="text-blue-600">LAB.</span>
-        </h1>
-        <p className="text-xs font-medium text-zinc-400">ブラウザで創る、理想のバレル</p>
+      <div className="absolute top-3 left-4 z-10 pointer-events-none select-none">
+        <img src="/logo.png" alt="ORDER GRIP" className="h-10 md:h-12 w-auto brightness-0 invert dark:brightness-100 dark:invert-0" />
       </div>
 
       {/* Reset Camera Button */}
