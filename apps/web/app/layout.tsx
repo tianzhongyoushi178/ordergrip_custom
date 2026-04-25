@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ORDER GRIP - ダーツバレル3Dコンフィギュレーター",
+  title: "Just one GRIP - ダーツバレル3Dコンフィギュレーター",
   description: "ブラウザ上でダーツバレルを3Dモデリング。重量・重心をリアルタイム計算しながらカスタムデザインを作成できるツール。",
 };
 
