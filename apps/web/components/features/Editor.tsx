@@ -41,6 +41,91 @@ const NumInput = ({ value, onChange, className, ...rest }: {
     );
 };
 
+/** +/- ボタン付き数値入力 */
+const NumStepper = ({
+    value,
+    onChange,
+    step = 0.1,
+    min,
+    max,
+    integer = false,
+    className = '',
+    inputClassName = '',
+    bg = 'bg-white dark:bg-zinc-900',
+}: {
+    value: number;
+    onChange: (v: number) => void;
+    step?: number;
+    min?: number;
+    max?: number;
+    integer?: boolean;
+    className?: string;
+    inputClassName?: string;
+    bg?: string;
+}) => {
+    const [local, setLocal] = useState<string | null>(null);
+    const ref = useRef<HTMLInputElement>(null);
+
+    const clamp = useCallback((v: number): number => {
+        let next = v;
+        if (integer) next = Math.round(next);
+        if (min !== undefined && next < min) next = min;
+        if (max !== undefined && next > max) next = max;
+        return integer ? next : Math.round(next * 1000) / 1000;
+    }, [integer, min, max]);
+
+    const commit = useCallback(() => {
+        if (local === null) return;
+        const parsed = parseFloat(local);
+        if (!isNaN(parsed)) onChange(clamp(parsed));
+        setLocal(null);
+    }, [local, onChange, clamp]);
+
+    const adjust = useCallback((delta: number) => {
+        const base = local !== null && !isNaN(parseFloat(local)) ? parseFloat(local) : value;
+        onChange(clamp(base + delta));
+        setLocal(null);
+    }, [local, value, onChange, clamp]);
+
+    const display = local ?? (Number.isInteger(value) ? String(value) : parseFloat(value.toFixed(2)).toString());
+
+    return (
+        <div className={`flex items-stretch border border-zinc-200 dark:border-zinc-700 rounded overflow-hidden ${bg} ${className}`}>
+            <button
+                type="button"
+                onClick={() => adjust(-step)}
+                onMouseDown={(e) => e.preventDefault()}
+                className="px-1.5 shrink-0 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-white text-base font-bold select-none border-r border-zinc-200 dark:border-zinc-700 leading-none"
+                aria-label="減らす"
+                tabIndex={-1}
+            >
+                −
+            </button>
+            <input
+                ref={ref}
+                type="text"
+                inputMode="decimal"
+                className={`flex-1 min-w-0 w-full p-1 text-right text-sm font-bold bg-transparent outline-none ${inputClassName}`}
+                value={display}
+                onFocus={() => setLocal(display)}
+                onChange={(e) => setLocal(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => { if (e.key === 'Enter') { commit(); ref.current?.blur(); } }}
+            />
+            <button
+                type="button"
+                onClick={() => adjust(step)}
+                onMouseDown={(e) => e.preventDefault()}
+                className="px-1.5 shrink-0 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-white text-base font-bold select-none border-l border-zinc-200 dark:border-zinc-700 leading-none"
+                aria-label="増やす"
+                tabIndex={-1}
+            >
+                +
+            </button>
+        </div>
+    );
+};
+
 // Simple implementation without extra deps for now
 export const Editor = () => {
     const {
@@ -337,12 +422,12 @@ export const Editor = () => {
                                 <div className="flex justify-between mb-2">
                                     <label className="text-sm font-medium">フロントテーパー終了位置</label>
                                     <div className="flex items-center gap-1">
-                                        <input
-                                            type="number"
-                                            min="0" max={length} step="0.5"
+                                        <NumStepper
                                             value={frontTaperLength}
-                                            onChange={(e) => updateDimension('frontTaperLength', parseFloat(e.target.value))}
-                                            className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                            onChange={(v) => updateDimension('frontTaperLength', v)}
+                                            step={0.5} min={0} max={length}
+                                            className="w-28"
+                                            bg="bg-transparent"
                                         />
                                         <span className="text-sm font-bold">mm</span>
                                     </div>
@@ -359,15 +444,12 @@ export const Editor = () => {
                                 <div className="flex justify-between mb-2">
                                     <label className="text-sm font-medium">リアテーパー開始位置</label>
                                     <div className="flex items-center gap-1">
-                                        <input
-                                            type="number"
-                                            min="0" max={length} step="0.5"
-                                            value={(length - rearTaperLength).toFixed(1)}
-                                            onChange={(e) => {
-                                                const val = parseFloat(e.target.value);
-                                                updateDimension('rearTaperLength', length - val);
-                                            }}
-                                            className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                        <NumStepper
+                                            value={parseFloat((length - rearTaperLength).toFixed(1))}
+                                            onChange={(v) => updateDimension('rearTaperLength', length - v)}
+                                            step={0.5} min={0} max={length}
+                                            className="w-28"
+                                            bg="bg-transparent"
                                         />
                                         <span className="text-sm font-bold">mm</span>
                                     </div>
@@ -389,22 +471,22 @@ export const Editor = () => {
                     <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-medium text-zinc-500">前穴 (チップ側)</label>
-                            <input
-                                type="number"
-                                min={0} max={30} step={0.5}
+                            <NumStepper
                                 value={holeDepthFront}
-                                onChange={(e) => updateDimension('holeDepthFront', parseFloat(e.target.value))}
-                                className="w-full p-1 text-right text-sm font-bold bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded"
+                                onChange={(v) => updateDimension('holeDepthFront', v)}
+                                step={0.5} min={0} max={30}
+                                className="w-full"
+                                bg="bg-zinc-50 dark:bg-zinc-800"
                             />
                         </div>
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-medium text-zinc-500">後穴 (シャフト側)</label>
-                            <input
-                                type="number"
-                                min={0} max={30} step={0.5}
+                            <NumStepper
                                 value={holeDepthRear}
-                                onChange={(e) => updateDimension('holeDepthRear', parseFloat(e.target.value))}
-                                className="w-full p-1 text-right text-sm font-bold bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded"
+                                onChange={(v) => updateDimension('holeDepthRear', v)}
+                                step={0.5} min={0} max={30}
+                                className="w-full"
+                                bg="bg-zinc-50 dark:bg-zinc-800"
                             />
                         </div>
                     </div>
@@ -416,12 +498,12 @@ export const Editor = () => {
                         <div className="flex justify-between mb-2">
                             <label className="text-sm font-medium">全長</label>
                             <div className="flex items-center gap-1">
-                                <input
-                                    type="number"
-                                    min="20" max="150" step="0.5"
+                                <NumStepper
                                     value={length}
-                                    onChange={(e) => updateDimension('length', parseFloat(e.target.value))}
-                                    className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                    onChange={(v) => updateDimension('length', v)}
+                                    step={0.5} min={20} max={150}
+                                    className="w-28"
+                                    bg="bg-transparent"
                                 />
                                 <span className="text-sm font-bold">mm</span>
                             </div>
@@ -437,12 +519,12 @@ export const Editor = () => {
                         <div className="flex justify-between mb-2">
                             <label className="text-sm font-medium">最大径</label>
                             <div className="flex items-center gap-1">
-                                <input
-                                    type="number"
-                                    min="5.5" max="8.5" step="0.1"
+                                <NumStepper
                                     value={maxDiameter}
-                                    onChange={(e) => updateDimension('maxDiameter', parseFloat(e.target.value))}
-                                    className="w-16 p-1 text-right text-sm font-bold bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                    onChange={(v) => updateDimension('maxDiameter', v)}
+                                    step={0.1} min={5.5} max={8.5}
+                                    className="w-28"
+                                    bg="bg-transparent"
                                 />
                                 <span className="text-sm font-bold">mm</span>
                             </div>
@@ -543,8 +625,24 @@ export const Editor = () => {
 
                                 <div className="space-y-3">
                                     {/* 開始位置 */}
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs w-16 text-zinc-500 shrink-0">開始位置</span>
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs text-zinc-500">開始位置</span>
+                                            <NumStepper
+                                                value={parseFloat(cut.startZ.toFixed(1))}
+                                                onChange={(v) => {
+                                                    const zoneLen = cut.endZ - cut.startZ;
+                                                    const newEnd = v + zoneLen;
+                                                    if (!checkCollision(cut.id, v, newEnd, cut.type) && newEnd <= length) {
+                                                        updateCut(cut.id, { startZ: v, endZ: newEnd });
+                                                    }
+                                                }}
+                                                step={0.5} min={0} max={length}
+                                                className="w-24"
+                                                inputClassName="text-xs"
+                                                bg="bg-transparent"
+                                            />
+                                        </div>
                                         <input
                                             type="range"
                                             min={0} max={length} step={0.5}
@@ -557,21 +655,7 @@ export const Editor = () => {
                                                 if (checkCollision(cut.id, newStart, newEnd, cut.type)) return;
                                                 updateCut(cut.id, { startZ: newStart, endZ: newEnd });
                                             }}
-                                            className="flex-1 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-500"
-                                        />
-                                        <input
-                                            type="number"
-                                            value={cut.startZ.toFixed(1)}
-                                            step={0.5} min={0} max={length}
-                                            onChange={(e) => {
-                                                const newStart = parseFloat(e.target.value);
-                                                const zoneLen = cut.endZ - cut.startZ;
-                                                const newEnd = newStart + zoneLen;
-                                                if (!checkCollision(cut.id, newStart, newEnd, cut.type) && newEnd <= length) {
-                                                    updateCut(cut.id, { startZ: newStart, endZ: newEnd });
-                                                }
-                                            }}
-                                            className="w-14 p-1 text-right text-xs bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                            className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-500"
                                         />
                                     </div>
 
@@ -584,10 +668,11 @@ export const Editor = () => {
                                                     <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                                                         <span>本数</span>
                                                     </div>
-                                                    <NumInput
+                                                    <NumStepper
                                                         value={cut.properties.itemCount || 12}
                                                         onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, itemCount: Math.round(v) } })}
-                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                        step={1} integer min={1}
+                                                        className="w-full"
                                                     />
                                                 </div>
                                                 <div>
@@ -595,10 +680,11 @@ export const Editor = () => {
                                                         <span>溝深さ</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <NumInput
+                                                    <NumStepper
                                                         value={curDepth}
                                                         onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, depth: v } })}
-                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                        step={0.05} min={0}
+                                                        className="w-full"
                                                     />
                                                 </div>
                                             </>
@@ -610,10 +696,11 @@ export const Editor = () => {
                                                         <span>溝幅</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <NumInput
+                                                    <NumStepper
                                                         value={curCutWidth}
                                                         onChange={(v) => updateDerived(v, curSpacing, curCount)}
-                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                        step={0.1} min={0.1}
+                                                        className="w-full"
                                                     />
                                                 </div>
                                                 <div>
@@ -621,10 +708,11 @@ export const Editor = () => {
                                                         <span>溝深さ</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <NumInput
+                                                    <NumStepper
                                                         value={curDepth}
                                                         onChange={(v) => updateCut(cut.id, { properties: { ...cut.properties, depth: v } })}
-                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                        step={0.05} min={0}
+                                                        className="w-full"
                                                     />
                                                 </div>
                                                 <div>
@@ -632,20 +720,22 @@ export const Editor = () => {
                                                         <span>溝間隔</span>
                                                         <span className="text-zinc-400">mm</span>
                                                     </div>
-                                                    <NumInput
+                                                    <NumStepper
                                                         value={curSpacing}
                                                         onChange={(v) => updateDerived(curCutWidth, v, curCount)}
-                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                        step={0.1} min={0}
+                                                        className="w-full"
                                                     />
                                                 </div>
                                                 <div>
                                                     <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                                                         <span>カット数</span>
                                                     </div>
-                                                    <NumInput
+                                                    <NumStepper
                                                         value={curCount}
                                                         onChange={(v) => updateDerived(curCutWidth, curSpacing, Math.round(v))}
-                                                        className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                        step={1} integer min={1}
+                                                        className="w-full"
                                                     />
                                                 </div>
                                             </>
@@ -660,10 +750,11 @@ export const Editor = () => {
                                                 <span>サブ溝間隔</span>
                                                 <span className="text-zinc-400">mm</span>
                                             </div>
-                                            <NumInput
+                                            <NumStepper
                                                 value={cut.properties.gapWidth ?? 0.1}
                                                 onChange={(v) => updateDerived(curCutWidth, curSpacing, curCount, { gapWidth: v })}
-                                                className="w-full p-1 text-sm font-bold text-right bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded"
+                                                step={0.1} min={0}
+                                                className="w-full"
                                             />
                                         </div>
                                     )}
@@ -671,19 +762,24 @@ export const Editor = () => {
                                     {isVertical && (
                                         <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50 space-y-3">
                                             {/* 終了位置（溝長さ） */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs w-16 text-zinc-500 shrink-0">終了位置</span>
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs text-zinc-500">終了位置</span>
+                                                    <NumStepper
+                                                        value={cut.endZ}
+                                                        onChange={(v) => updateCut(cut.id, { endZ: v })}
+                                                        step={0.5} min={cut.startZ + 1} max={length}
+                                                        className="w-24"
+                                                        inputClassName="text-xs"
+                                                        bg="bg-transparent"
+                                                    />
+                                                </div>
                                                 <input
                                                     type="range"
                                                     min={cut.startZ + 1} max={length} step={0.5}
                                                     value={cut.endZ}
                                                     onChange={(e) => updateCut(cut.id, { endZ: parseFloat(e.target.value) })}
-                                                    className="flex-1 h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-500"
-                                                />
-                                                <NumInput
-                                                    value={cut.endZ}
-                                                    onChange={(v) => updateCut(cut.id, { endZ: v })}
-                                                    className="w-14 p-1 text-right text-xs bg-transparent border border-zinc-200 dark:border-zinc-700 rounded"
+                                                    className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-500"
                                                 />
                                             </div>
 
