@@ -7,15 +7,16 @@ import { useBarrelStore } from '@/lib/store/useBarrelStore';
 export default function Home() {
   return (
     <main className="flex flex-col md:block relative w-full h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
-      <div className="absolute top-3 left-4 z-10 pointer-events-none select-none leading-none">
-        <div className="text-[9px] md:text-[11px] uppercase tracking-[0.4em] font-light italic text-zinc-500 dark:text-zinc-400">
-          Just one
-        </div>
-        <div className="flex items-center gap-2 mt-1.5">
-          <span className="block w-5 md:w-6 h-px bg-zinc-900 dark:bg-white" />
-          <span className="text-2xl md:text-3xl uppercase font-black tracking-[0.2em] text-zinc-900 dark:text-white">
+      <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
+        <img src="/logo.png" alt="ORDER GRIP" className="h-10 md:h-12 w-auto invert dark:invert-0" />
+        <div className="h-8 md:h-10 w-px bg-zinc-300 dark:bg-zinc-700" />
+        <div className="leading-none">
+          <div className="text-[9px] md:text-[10px] uppercase tracking-[0.35em] font-light italic text-zinc-500 dark:text-zinc-400">
+            Just one
+          </div>
+          <div className="text-base md:text-lg uppercase font-black tracking-[0.2em] text-zinc-900 dark:text-white mt-1">
             GRIP
-          </span>
+          </div>
         </div>
       </div>
 
