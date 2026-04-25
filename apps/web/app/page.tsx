@@ -8,7 +8,7 @@ export default function Home() {
   return (
     <main className="flex flex-col md:block relative w-full h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none">
-        <img src="/logo.png" alt="ORDER GRIP" className="h-10 md:h-12 w-auto brightness-0 invert dark:brightness-100 dark:invert-0" />
+        <img src="/logo.png" alt="ORDER GRIP" className="h-10 md:h-12 w-auto dark:brightness-0 dark:invert" />
       </div>
 
       {/* Reset Camera Button */}
