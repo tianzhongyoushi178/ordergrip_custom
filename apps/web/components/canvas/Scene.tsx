@@ -57,7 +57,10 @@ export const Scene = () => {
                         <Text
                             position={[0, labelY, 0]}
                             fontSize={fontSize}
-                            color="#111" // Darker
+                            color="#ffffff"
+                            outlineColor="#000000"
+                            outlineWidth={0.08}
+                            outlineOpacity={0.9}
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
@@ -77,7 +80,10 @@ export const Scene = () => {
                         <Text
                             position={[0, labelY, 0]}
                             fontSize={fontSize}
-                            color="#111"
+                            color="#ffffff"
+                            outlineColor="#000000"
+                            outlineWidth={0.08}
+                            outlineOpacity={0.9}
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
