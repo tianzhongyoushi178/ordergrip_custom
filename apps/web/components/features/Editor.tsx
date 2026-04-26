@@ -131,8 +131,8 @@ export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
         frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline,
-        shapeType,
-        updateDimension, updateShapeType, addCut, removeCut, updateCut,
+        shapeType, frontEndShape, rearEndShape,
+        updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
         setAll, setMaterialDensity, activeCutId, setActiveCutId
     } = useBarrelStore();
 
@@ -140,9 +140,9 @@ export const Editor = () => {
 
     // Add physics dependencies
     const physics = useMemo(() => {
-        const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline);
+        const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape);
         return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear);
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape]);
 
     // Mobile toggle removed for split view
     // const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -419,8 +419,27 @@ export const Editor = () => {
                         </summary>
                         <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-top-1 duration-200">
                             <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-sm font-medium">前端 (チップ側) 形状</label>
+                                    <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded p-0.5">
+                                        {(['taper', 'round'] as const).map((s) => (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                onClick={() => updateEndShape('front', s)}
+                                                className={`px-2.5 py-1 text-xs rounded font-bold transition-colors ${
+                                                    frontEndShape === s
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                                                }`}
+                                            >
+                                                {s === 'taper' ? 'テーパー' : 'R'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 <div className="flex justify-between mb-2">
-                                    <label className="text-sm font-medium">フロントテーパー終了位置</label>
+                                    <label className="text-xs text-zinc-500">{frontEndShape === 'round' ? 'R長さ' : 'フロントテーパー終了位置'}</label>
                                     <div className="flex items-center gap-1">
                                         <NumStepper
                                             value={frontTaperLength}
@@ -441,12 +460,31 @@ export const Editor = () => {
                             </div>
 
                             <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="text-sm font-medium">後端 (シャフト側) 形状</label>
+                                    <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded p-0.5">
+                                        {(['taper', 'round'] as const).map((s) => (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                onClick={() => updateEndShape('rear', s)}
+                                                className={`px-2.5 py-1 text-xs rounded font-bold transition-colors ${
+                                                    rearEndShape === s
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+                                                }`}
+                                            >
+                                                {s === 'taper' ? 'テーパー' : 'R'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 <div className="flex justify-between mb-2">
-                                    <label className="text-sm font-medium">リアテーパー開始位置</label>
+                                    <label className="text-xs text-zinc-500">{rearEndShape === 'round' ? 'R長さ' : 'リアテーパー開始位置'}</label>
                                     <div className="flex items-center gap-1">
                                         <NumStepper
-                                            value={parseFloat((length - rearTaperLength).toFixed(1))}
-                                            onChange={(v) => updateDimension('rearTaperLength', length - v)}
+                                            value={parseFloat((rearEndShape === 'round' ? rearTaperLength : (length - rearTaperLength)).toFixed(1))}
+                                            onChange={(v) => updateDimension('rearTaperLength', rearEndShape === 'round' ? v : length - v)}
                                             step={0.5} min={0} max={length}
                                             className="w-28"
                                             bg="bg-transparent"
@@ -456,10 +494,10 @@ export const Editor = () => {
                                 </div>
                                 <input
                                     type="range" min="0" max={length} step="0.5"
-                                    value={length - rearTaperLength}
+                                    value={rearEndShape === 'round' ? rearTaperLength : (length - rearTaperLength)}
                                     onChange={(e) => {
                                         const val = parseFloat(e.target.value);
-                                        updateDimension('rearTaperLength', length - val);
+                                        updateDimension('rearTaperLength', rearEndShape === 'round' ? val : length - val);
                                     }}
                                     className="w-full accent-blue-600"
                                 />

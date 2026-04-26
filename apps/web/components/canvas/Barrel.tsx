@@ -28,14 +28,14 @@ const CutHighlight = ({ startZ, endZ, length, maxDiameter }: {
 };
 
 export const Barrel = () => {
-    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, activeCutId } = useBarrelStore();
+    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape, activeCutId } = useBarrelStore();
 
     const geometry = useMemo(() => {
-        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline);
+        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape);
         geom.rotateX(-Math.PI / 2);
         geom.translate(0, 0, -length / 2);
         return geom;
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape]);
 
     const activeCut = activeCutId ? cuts.find(c => c.id === activeCutId) : null;
 

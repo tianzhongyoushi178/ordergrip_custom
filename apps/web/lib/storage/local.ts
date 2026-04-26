@@ -14,6 +14,8 @@ export const saveToLocalStorage = (state: Partial<BarrelState>) => {
         holeDepthRear: state.holeDepthRear,
         outline: state.outline,
         shapeType: state.shapeType,
+        frontEndShape: state.frontEndShape,
+        rearEndShape: state.rearEndShape,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
@@ -41,6 +43,8 @@ export const exportToJson = (state: Partial<BarrelState>, filename: string = 'my
         holeDepthRear: state.holeDepthRear,
         outline: state.outline,
         shapeType: state.shapeType,
+        frontEndShape: state.frontEndShape,
+        rearEndShape: state.rearEndShape,
         timestamp: new Date().toISOString()
     };
 
@@ -77,6 +81,12 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
 
     if (typeof raw.shapeType === 'string' && ['torpedo', 'straight', 'custom'].includes(raw.shapeType)) {
         result.shapeType = raw.shapeType as BarrelState['shapeType'];
+    }
+    if (typeof raw.frontEndShape === 'string' && ['taper', 'round'].includes(raw.frontEndShape)) {
+        result.frontEndShape = raw.frontEndShape as BarrelState['frontEndShape'];
+    }
+    if (typeof raw.rearEndShape === 'string' && ['taper', 'round'].includes(raw.rearEndShape)) {
+        result.rearEndShape = raw.rearEndShape as BarrelState['rearEndShape'];
     }
 
     if (Array.isArray(raw.outline)) {

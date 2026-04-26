@@ -7,6 +7,8 @@ export type CutType =
   | 'scallop' | 'shark' | 'wing'
   | 'micro' | 'vertical' | 'none';
 
+export type EndShape = 'taper' | 'round';
+
 export interface CutZone {
   id: string;
   type: CutType;
@@ -36,6 +38,10 @@ export interface BarrelState {
   rearTaperLength: number;  // mm
   shapeType: 'torpedo' | 'straight' | 'custom';
 
+  // 前後端の形状: 'taper' (直線テーパー) or 'round' (R/円弧)
+  frontEndShape: EndShape;
+  rearEndShape: EndShape;
+
   // Custom Outline (Overrides Tapers)
   outline: OutlinePoint[];
 
@@ -52,6 +58,7 @@ export interface BarrelState {
   // Actions
   updateDimension: (property: 'length' | 'maxDiameter' | 'frontTaperLength' | 'rearTaperLength' | 'holeDepthFront' | 'holeDepthRear', value: number) => void;
   updateShapeType: (shapeType: 'torpedo' | 'straight' | 'custom') => void;
+  updateEndShape: (which: 'front' | 'rear', shape: EndShape) => void;
   addCut: (cut: CutZone) => void;
   removeCut: (id: string) => void;
   updateCut: (id: string, cut: Partial<CutZone>) => void;
@@ -77,10 +84,16 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   frontTaperLength: 10,
   rearTaperLength: 10,
   shapeType: 'torpedo',
+  frontEndShape: 'taper',
+  rearEndShape: 'taper',
   outline: [],
   cuts: [],
 
   updateDimension: (key, value) => set((state) => ({ ...state, [key]: value, shapeType: 'custom' })),
+  updateEndShape: (which, shape) => set((state) => ({
+    ...state,
+    ...(which === 'front' ? { frontEndShape: shape } : { rearEndShape: shape }),
+  })),
 
   updateShapeType: (shapeType) => set((state) => {
     if (shapeType === 'torpedo') {

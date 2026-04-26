@@ -1,5 +1,27 @@
 import * as THREE from 'three';
-import { CutZone } from '../store/useBarrelStore';
+import { CutZone, EndShape } from '../store/useBarrelStore';
+
+/** 前後端の形状を計算: テーパー(直線) or R(楕円弧).
+ *  前端:  z=0 で tipR、z=taperLen で baseR
+ *  後端:  z=length で threadR、z=length-taperLen で baseR
+ */
+const endRadius = (
+    distFromEnd: number, // 端からの距離 (mm). 0=端、taperLen=baseに到達
+    taperLen: number,
+    endR: number,
+    baseR: number,
+    shape: EndShape
+): number => {
+    if (taperLen <= 0) return baseR;
+    const t = Math.min(1, Math.max(0, distFromEnd / taperLen));
+    if (shape === 'round') {
+        // 楕円弧 (z軸=taperLen, r軸=baseR-endR の楕円). 凸形状でR(丸み)を描く。
+        // r = baseR - (baseR-endR) * sqrt(1 - t^2)
+        return baseR - (baseR - endR) * Math.sqrt(Math.max(0, 1 - t * t));
+    }
+    // 直線テーパー
+    return endR + (baseR - endR) * t;
+};
 
 export const generateProfile = (
     length: number,
@@ -7,7 +29,9 @@ export const generateProfile = (
     cuts: CutZone[],
     frontTaperLen: number = 10,
     rearTaperLen: number = 10,
-    outline: { z: number, d: number }[] = []
+    outline: { z: number, d: number }[] = [],
+    frontEndShape: EndShape = 'taper',
+    rearEndShape: EndShape = 'taper'
 ): THREE.Vector2[] => {
     const points: THREE.Vector2[] = [];
     const baseRadius = maxDiameter / 2;
@@ -52,16 +76,14 @@ export const generateProfile = (
                 }
             }
         } else {
-            // --- TRADITIONAL TAPER LOGIC (Fallback) ---
-            // Front Taper
+            // --- TRADITIONAL END SHAPING (Fallback) ---
+            // Front End (taper or round)
             if (z < frontTaperLen) {
-                // Linear interpolate
-                r = tipRadius + (baseRadius - tipRadius) * (z / frontTaperLen);
+                r = endRadius(z, frontTaperLen, tipRadius, baseRadius, frontEndShape);
             }
-            // Rear Taper
+            // Rear End (taper or round)
             else if (z > length - rearTaperLen) {
-                const ratio = (length - z) / rearTaperLen;
-                r = threadRadius + (baseRadius - threadRadius) * ratio;
+                r = endRadius(length - z, rearTaperLen, threadRadius, baseRadius, rearEndShape);
             }
         }
 
@@ -229,10 +251,12 @@ export const generateBarrelGeometry = (
     rearTaperLen: number,
     holeDepthFront: number,
     holeDepthRear: number,
-    outline: { z: number, d: number }[] = []
+    outline: { z: number, d: number }[] = [],
+    frontEndShape: EndShape = 'taper',
+    rearEndShape: EndShape = 'taper'
 ): THREE.BufferGeometry => {
     // 1. Get Base Profile (Outer surface only)
-    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline);
+    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape);
 
     // 2. Construct FULL Profile (Inner -> Outer -> Inner)
     // 2BA Hole Radius approx 2.1mm
