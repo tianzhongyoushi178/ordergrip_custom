@@ -6,7 +6,17 @@ import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 export default function Home() {
   return (
-    <main className="flex flex-col md:block relative w-full h-screen bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
+    <main
+      className="flex flex-col md:block relative w-full h-screen bg-zinc-950 overflow-hidden"
+      style={{
+        backgroundImage:
+          "linear-gradient(rgba(8,8,12,0.78), rgba(8,8,12,0.78)), url('/justonegrip-bg.jpg')",
+        backgroundSize: 'cover, contain',
+        backgroundRepeat: 'no-repeat, no-repeat',
+        backgroundPosition: 'center, center',
+        backgroundColor: '#0a0a0a',
+      }}
+    >
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
         <img src="/logo.png" alt="ORDER GRIP" className="h-10 md:h-12 w-auto invert dark:invert-0" />
         <div className="h-8 md:h-10 w-px bg-zinc-300 dark:bg-zinc-700" />
