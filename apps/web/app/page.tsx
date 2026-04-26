@@ -18,7 +18,7 @@ export default function Home() {
       }}
     >
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
-        <img src="/logo.png" alt="ORDER GRIP" className="h-12 md:h-14 w-auto invert dark:invert-0" />
+        <img src="/logo.png" alt="ORDER GRIP" className="h-12 md:h-14 w-auto" />
         <div className="h-10 md:h-12 w-px bg-zinc-700" />
         <img
           src="/justonegrip-bg.jpg"
