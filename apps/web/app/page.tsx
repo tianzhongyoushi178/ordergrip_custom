@@ -6,17 +6,7 @@ import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 export default function Home() {
   return (
-    <main
-      className="flex flex-col md:block relative w-full h-screen bg-zinc-950 overflow-hidden"
-      style={{
-        backgroundImage:
-          "linear-gradient(rgba(8,8,12,0.78), rgba(8,8,12,0.78)), url('/justonegrip-bg.jpg')",
-        backgroundSize: 'cover, contain',
-        backgroundRepeat: 'no-repeat, no-repeat',
-        backgroundPosition: 'center, center',
-        backgroundColor: '#0a0a0a',
-      }}
-    >
+    <main className="flex flex-col md:block relative w-full h-screen bg-zinc-950 overflow-hidden">
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
         <img src="/logo.png" alt="ORDER GRIP" className="h-12 md:h-14 w-auto" />
         <div className="h-10 md:h-12 w-px bg-zinc-700" />
@@ -42,7 +32,17 @@ export default function Home() {
 
       {/* 3D Scene Layer */}
       {/* Mobile: Top 40% height. Desktop: Full screen background */}
-      <div className="absolute top-0 left-0 w-full h-[40vh] md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none">
+      <div
+        className="absolute top-0 left-0 w-full h-[40vh] md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(8,8,12,0.78), rgba(8,8,12,0.78)), url('/justonegrip-bg.jpg')",
+          backgroundSize: 'cover, contain',
+          backgroundRepeat: 'no-repeat, no-repeat',
+          backgroundPosition: 'center, center',
+          backgroundColor: '#0a0a0a',
+        }}
+      >
         <Scene />
       </div>
 
