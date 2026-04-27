@@ -32,7 +32,7 @@ export const Scene = () => {
     }, [cameraResetTrigger, isMobile]);
 
     const offset = 8; // mm gap from barrel end
-    const fontSize = isMobile ? 2.5 : 4;
+    const fontSize = isMobile ? 3.5 : 5;
     const labelY = isMobile ? 8 : 4; // Move labels higher on mobile
 
     return (
@@ -59,8 +59,9 @@ export const Scene = () => {
                             fontSize={fontSize}
                             color="#ffffff"
                             outlineColor="#000000"
-                            outlineWidth={0.08}
-                            outlineOpacity={0.9}
+                            outlineWidth="15%"
+                            outlineOpacity={1}
+                            outlineBlur="20%"
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
@@ -82,8 +83,9 @@ export const Scene = () => {
                             fontSize={fontSize}
                             color="#ffffff"
                             outlineColor="#000000"
-                            outlineWidth={0.08}
-                            outlineOpacity={0.9}
+                            outlineWidth="15%"
+                            outlineOpacity={1}
+                            outlineBlur="20%"
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
