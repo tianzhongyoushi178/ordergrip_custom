@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useBarrelStore } from '@/lib/store/useBarrelStore';
+import { useEffect, useState } from 'react';
+import { useBarrelStore, type BarrelState } from '@/lib/store/useBarrelStore';
 
-const COUNT_KEY = 'orderGrip_cutAddCount';
-const AD_TRIGGER_INTERVAL = 3;
+const COUNT_KEY = 'orderGrip_changeCount';
+const AD_TRIGGER_INTERVAL = 10;
+const DEBOUNCE_MS = 300;
 
 interface AdGate {
   showAd: boolean;
@@ -12,32 +13,64 @@ interface AdGate {
 }
 
 /**
- * カット追加回数を localStorage で記録し、3回ごとに広告フラグを立てる。
- * `cuts.length` が前回より増えたタイミングのみ追加扱いとする（削除や状態復元では加算しない）。
+ * 計数対象のフィールドだけをまとめたシグネチャ。
+ * activeCutId / cameraResetTrigger などのUI専用フィールドは除外。
+ */
+function makeSignature(s: BarrelState): string {
+  return JSON.stringify({
+    length: s.length,
+    maxDiameter: s.maxDiameter,
+    materialDensity: s.materialDensity,
+    frontTaperLength: s.frontTaperLength,
+    rearTaperLength: s.rearTaperLength,
+    holeDepthFront: s.holeDepthFront,
+    holeDepthRear: s.holeDepthRear,
+    shapeType: s.shapeType,
+    frontEndShape: s.frontEndShape,
+    rearEndShape: s.rearEndShape,
+    cuts: s.cuts,
+    outline: s.outline,
+  });
+}
+
+/**
+ * バレルパラメータ(寸法・素材・カット等)の変更回数を localStorage で記録し、10回ごとに広告フラグを立てる。
+ * スライダー連続ドラッグなどの高頻度更新は 300ms の静止期間でひとまとめにカウントする。
  */
 export function useAdGate(): AdGate {
-  const cutsLength = useBarrelStore((s) => s.cuts.length);
-  const prevLengthRef = useRef(cutsLength);
   const [showAd, setShowAd] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const prev = prevLengthRef.current;
-    prevLengthRef.current = cutsLength;
+    let prevSig = makeSignature(useBarrelStore.getState());
+    let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
-    if (cutsLength <= prev) return;
+    const commitChange = () => {
+      pendingTimer = null;
+      const storedRaw = localStorage.getItem(COUNT_KEY);
+      const stored = storedRaw ? parseInt(storedRaw, 10) : 0;
+      const next = Number.isFinite(stored) && stored >= 0 ? stored + 1 : 1;
+      localStorage.setItem(COUNT_KEY, String(next));
+      if (next % AD_TRIGGER_INTERVAL === 0) {
+        setShowAd(true);
+      }
+    };
 
-    const storedRaw = localStorage.getItem(COUNT_KEY);
-    const stored = storedRaw ? parseInt(storedRaw, 10) : 0;
-    const next = Number.isFinite(stored) && stored >= 0 ? stored + 1 : 1;
+    const unsubscribe = useBarrelStore.subscribe((state) => {
+      const sig = makeSignature(state);
+      if (sig === prevSig) return;
+      prevSig = sig;
 
-    localStorage.setItem(COUNT_KEY, String(next));
+      if (pendingTimer) clearTimeout(pendingTimer);
+      pendingTimer = setTimeout(commitChange, DEBOUNCE_MS);
+    });
 
-    if (next % AD_TRIGGER_INTERVAL === 0) {
-      setShowAd(true);
-    }
-  }, [cutsLength]);
+    return () => {
+      unsubscribe();
+      if (pendingTimer) clearTimeout(pendingTimer);
+    };
+  }, []);
 
   return {
     showAd,
