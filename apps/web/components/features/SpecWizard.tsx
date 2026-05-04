@@ -8,6 +8,14 @@ interface SpecWizardProps {
     onCancel: () => void;
 }
 
+// Editor の素材プルダウンと同じ並び (タングステン% → 密度 g/cm³)
+const TUNGSTEN_OPTIONS: Array<{ pct: number; density: number }> = [
+    { pct: 95, density: 18.0 },
+    { pct: 90, density: 17.0 },
+    { pct: 80, density: 15.0 },
+    { pct: 70, density: 13.5 },
+];
+
 export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
     const [step, setStep] = useState(1);
     const [hasMounted, setHasMounted] = useState(false);
@@ -46,19 +54,15 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
         }));
     };
 
-    const calculateDensity = (tungstenPct: number) => {
-        // Basic linear interpolation between Nickel (8.9) and Tungsten (19.3)
-        // 90% is typically around 17.0 - 18.0 in reality
-        const w = tungstenPct / 100;
-        return 19.3 * w + 8.9 * (1 - w);
-    };
+    const densityForTungsten = (pct: number): number =>
+        TUNGSTEN_OPTIONS.find((o) => o.pct === pct)?.density ?? 17.0;
 
     const handleComplete = () => {
         setAll({
             shapeType: specs.shapeType,
             length: specs.length,
             maxDiameter: specs.maxDiameter,
-            materialDensity: calculateDensity(specs.tungsten),
+            materialDensity: densityForTungsten(specs.tungsten),
             frontTaperLength: specs.frontTaperLength,
             rearTaperLength: specs.rearTaperLength,
             cuts: [], // Reset cuts when starting fresh
@@ -143,25 +147,35 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
                     )}
 
                     {step === 3 && (
-                        <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-zinc-500 uppercase">タングステン (%)</label>
-                                <div className="flex items-center gap-4">
-                                    <input
-                                        type="range"
-                                        min="70"
-                                        max="97"
-                                        step="1"
-                                        value={specs.tungsten}
-                                        onChange={(e) => setSpecs({ ...specs, tungsten: Number(e.target.value) })}
-                                        className="flex-1 accent-indigo-500 h-1 bg-zinc-800 rounded-full appearance-none"
-                                    />
-                                    <span className="text-base font-black text-white w-10 text-right">{specs.tungsten}</span>
-                                </div>
-                                <p className="text-[10px] text-zinc-500 leading-tight">
-                                    比率が高いほど、細くて重いバレルになります。
-                                </p>
+                        <div className="space-y-3 animate-in slide-in-from-right-4 duration-300">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase block">タングステン (%)</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {TUNGSTEN_OPTIONS.map((opt) => {
+                                    const selected = specs.tungsten === opt.pct;
+                                    return (
+                                        <button
+                                            key={opt.pct}
+                                            type="button"
+                                            onClick={() => setSpecs({ ...specs, tungsten: opt.pct })}
+                                            className={`p-2.5 rounded-xl border transition-all text-left ${
+                                                selected
+                                                    ? 'border-indigo-500 bg-indigo-500/10'
+                                                    : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
+                                            }`}
+                                        >
+                                            <div className={`text-base font-black leading-none ${selected ? 'text-white' : 'text-zinc-300'}`}>
+                                                {opt.pct}%
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500 mt-1">
+                                                {opt.density.toFixed(1)} g/cm³
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
+                            <p className="text-[10px] text-zinc-500 leading-tight">
+                                比率が高いほど、細くて重いバレルになります。
+                            </p>
                         </div>
                     )}
                 </div>
