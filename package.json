@@ -7,9 +7,13 @@
     "scripts": {
         "build": "turbo run build",
         "dev": "turbo run dev",
-        "lint": "turbo run lint"
+        "lint": "turbo run lint",
+        "e2e": "playwright test",
+        "e2e:headed": "playwright test --headed",
+        "e2e:report": "playwright show-report"
     },
     "devDependencies": {
+        "@playwright/test": "^1.59.1",
         "turbo": "latest"
     },
     "packageManager": "pnpm@9.15.0",

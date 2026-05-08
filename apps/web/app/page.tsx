@@ -10,7 +10,7 @@ export default function Home() {
   const { showAd, dismissAd } = useAdGate();
 
   return (
-    <main className="flex flex-col md:block relative w-full h-screen bg-zinc-950 overflow-hidden">
+    <main className="flex flex-col md:block relative w-full h-[100dvh] bg-zinc-950 overflow-hidden">
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
         <img src="/logo.png" alt="ORDER GRIP" className="h-12 md:h-14 w-auto" />
         <div className="h-10 md:h-12 w-px bg-zinc-700" />
@@ -37,7 +37,7 @@ export default function Home() {
       {/* 3D Scene Layer */}
       {/* Mobile: Top 40% height. Desktop: Full screen background */}
       <div
-        className="absolute top-0 left-0 w-full h-[40vh] md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none"
+        className="absolute top-0 left-0 w-full h-[40dvh] md:inset-0 md:h-full z-0 cursor-move border-b border-zinc-200 dark:border-zinc-800 md:border-none"
         style={{
           backgroundImage:
             "linear-gradient(rgba(8,8,12,0.78), rgba(8,8,12,0.78)), url('/justonegrip-bg.jpg')",
@@ -56,7 +56,7 @@ export default function Home() {
         <span>右ドラッグ: 移動</span>
         <span>スクロール: ズーム</span>
       </div>
-      <div className="absolute top-[38vh] left-4 z-10 pointer-events-none select-none flex md:hidden gap-3 text-[10px] text-zinc-400">
+      <div className="absolute top-[38dvh] left-4 z-10 pointer-events-none select-none flex md:hidden gap-3 text-[10px] text-zinc-400">
         <span>1本指: 回転</span>
         <span>2本指: 移動&amp;ズーム</span>
       </div>

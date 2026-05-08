@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 interface SpecWizardProps {
@@ -23,13 +24,8 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
 
     useEffect(() => {
         setHasMounted(true);
-        // Prevent scrolling on mount
-        document.body.style.overflow = 'hidden';
-
-        return () => {
-            // Restore scrolling on unmount
-            document.body.style.overflow = '';
-        };
+        // The portal overlay covers the viewport; the page itself does not scroll
+        // because <main> uses overflow-hidden, so we don't need to lock body here.
     }, []);
 
     // Form State
@@ -73,16 +69,26 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
 
     if (!hasMounted) return null;
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 sm:items-center">
-            <div className="w-full max-w-[340px] sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[520px] sm:max-h-[90vh] animate-in fade-in zoom-in duration-300">
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm overflow-y-auto"
+            data-testid="spec-wizard"
+        >
+            <div
+                className="min-h-full flex items-center justify-center p-3 sm:p-4"
+                style={{
+                    paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+                    paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+                }}
+            >
+                <div className="w-full max-w-[340px] sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100svh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] sm:max-h-[90vh] animate-in fade-in zoom-in duration-300">
                 {/* Header - Very Slim for Mobile */}
                 <div className="p-3 sm:p-5 border-b border-zinc-800 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 shrink-0 text-center">
                     <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">バレルスペック</h2>
                 </div>
 
                 {/* Progress Bar (Visible on Mobile) */}
-                <div className="px-4 py-2 flex justify-center gap-3 bg-zinc-950/30 border-b border-zinc-800 shrink-0">
+                <div className="px-4 py-1.5 sm:py-2 flex justify-center gap-3 bg-zinc-950/30 border-b border-zinc-800 shrink-0">
                     {[1, 2, 3].map((s) => (
                         <div key={s} className="flex items-center gap-1.5">
                             <div className={`w-3 h-3 rounded-full ${step >= s ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-zinc-800'}`} />
@@ -91,7 +97,7 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
                 </div>
 
                 {/* Content */}
-                <div className="p-4 sm:p-8 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+                <div className="p-3 sm:p-8 space-y-3 sm:space-y-4 overflow-y-auto flex-1 custom-scrollbar">
                     {step === 1 && (
                         <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                             <div className="space-y-1.5">
@@ -195,7 +201,9 @@ export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
                         {step === 3 ? '開始' : '次へ'}
                     </button>
                 </div>
+                </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

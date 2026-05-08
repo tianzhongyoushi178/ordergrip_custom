@@ -38,12 +38,20 @@ export function AdModal({ onClose }: AdModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+      className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label="広告"
+      data-testid="ad-modal"
     >
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div
+        className="min-h-full flex items-center justify-center p-3 sm:p-6"
+        style={{
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+        }}
+      >
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[calc(100svh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] sm:max-h-[92vh] flex flex-col overflow-hidden">
         {/* Linear progress bar */}
         <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
           <div
@@ -114,7 +122,7 @@ export function AdModal({ onClose }: AdModalProps) {
         </div>
 
         {/* Iframe content */}
-        <div className="flex-1 relative bg-zinc-50 dark:bg-zinc-950 min-h-[50vh]">
+        <div className="flex-1 relative bg-zinc-50 dark:bg-zinc-950 min-h-[240px] sm:min-h-[50vh]">
           <iframe
             src={AD_URL}
             className="absolute inset-0 w-full h-full border-0"
@@ -137,6 +145,7 @@ export function AdModal({ onClose }: AdModalProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
           </a>
+        </div>
         </div>
       </div>
     </div>

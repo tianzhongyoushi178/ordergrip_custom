@@ -260,17 +260,21 @@ export const Editor = () => {
 
     return (
         <div
+            data-testid="editor-panel"
             className={`
                 z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-xl
                 /* Mobile: Absolute Bottom Sheet, 60% height */
-                absolute bottom-0 w-full h-[60vh] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.1)]
+                absolute bottom-0 w-full h-[60dvh] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.1)]
                 /* Desktop: Absolute Sidebar, Full Height */
                 md:top-0 md:right-0 md:h-full md:w-80 md:border-l md:border-zinc-200 md:dark:border-zinc-800 md:rounded-none
                 border-t border-zinc-200 dark:border-zinc-800
             `}
+            style={{
+                paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
         >
             {/* Scrollable Content */}
-            <div className="overflow-y-auto h-full px-6 py-6 pb-20 md:pb-6">
+            <div className="overflow-y-auto h-full px-4 sm:px-6 py-6 pb-24 md:pb-6 overscroll-contain">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-xl font-bold">バレルスペック設定</h1>
                     <button
