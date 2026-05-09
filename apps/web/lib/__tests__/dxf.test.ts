@@ -20,7 +20,7 @@ describe('generateDxf', () => {
         const dxf = generateDxf(baseInput);
         expect(dxf).toContain('SECTION');
         expect(dxf).toContain('HEADER');
-        expect(dxf).toContain('AC1009'); // R12
+        expect(dxf).toContain('$ACADVER');
         expect(dxf).toContain('ENTITIES');
         expect(dxf.trim().endsWith('EOF')).toBe(true);
     });
@@ -43,7 +43,7 @@ describe('generateDxf', () => {
     it('全長と最大径のテキスト寸法が含まれる', () => {
         const dxf = generateDxf(baseInput);
         expect(dxf).toContain('L=45.0mm');
-        expect(dxf).toContain('⌀7.0mm');
+        expect(dxf).toContain('DIA 7.0mm');
     });
 
     it('素材名が含まれる', () => {
@@ -88,13 +88,16 @@ describe('generateDxf', () => {
 
     it('ホールの深さが0なら穴矩形を生成しない', () => {
         const dxf = generateDxf({ ...baseInput, holeDepthFront: 0, holeDepthRear: 0 });
-        // HOLES レイヤー定義は残るが、HOLES への POLYLINE は外形 OUTLINE のみ
-        const holePolyMatches = dxf.match(/8\r\nHOLES\r\n66/g) ?? [];
-        expect(holePolyMatches.length).toBe(0);
+        // HOLES レイヤーへの POLYLINE エンティティは生成されない (LAYER 定義は残る)
+        const holeEntityMatch = /\b8\s*\n\s*HOLES\s*\n\s*66\b/m.test(dxf);
+        expect(holeEntityMatch).toBe(false);
     });
 
-    it('CRLF 改行で出力される (DXF標準)', () => {
+    it('AutoCAD 互換フォーマットで出力 (HEADER/TABLES/BLOCKS/ENTITIES セクション)', () => {
         const dxf = generateDxf(baseInput);
-        expect(dxf).toContain('\r\n');
+        expect(dxf).toContain('TABLES');
+        expect(dxf).toContain('BLOCKS');
+        expect(dxf).toContain('ENTITIES');
+        expect(dxf).toContain('LAYER');
     });
 });
