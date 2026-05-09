@@ -46,78 +46,90 @@ describe('generateDxf', () => {
         expect(dxf).toContain('DIM');
     });
 
-    it('3D POLYLINE エンティティを使わない', () => {
+    it('POLYLINE / LWPOLYLINE / VERTEX エンティティを使わない (全て LINE)', () => {
         const dxf = generateDxf(baseInput);
-        // 旧実装は POLYLINE + VERTEX + SEQEND の3D ポリラインを大量に出力していた
-        // 新実装は LINE / ARC / LWPOLYLINE のみで構成される
         expect(countOccurrences(dxf, 'POLYLINE')).toBe(0);
+        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBe(0);
         expect(countOccurrences(dxf, 'VERTEX')).toBe(0);
         expect(countOccurrences(dxf, 'SEQEND')).toBe(0);
     });
 
     it('LINE エンティティを含む (中心軸/端面/穴/寸法)', () => {
         const dxf = generateDxf(baseInput);
-        // テーパー前後 + 本体 + 中心軸 + 端面x2 + 穴(計8本) + 寸法線3本 = 多数
         expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(10);
     });
 
-    it('テーパー端の場合は LINE 1本 (前) + LINE 1本 (後) で構成される', () => {
-        // カット無し・テーパー端の場合、前端/後端それぞれ単純な LINE
+    it('カット無しのテーパー形状は最小数の LINE で表現される', () => {
+        // 共線統合により、カット無しの本体は: 前テーパー1+本体1+後テーパー1 = 3 セグメント上半 + 3 下半 + 端面2 + 中心軸1 + 穴8 + 寸法3 = 計20本程度
         const dxf = generateDxf(baseInput);
-        // 上下対称なので LINE 数は十分多い: 前端2 + 後端2 + 本体2 + 端面2 + 中心軸1 + 穴8 + 寸法線3
-        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThanOrEqual(20);
+        const total = countOccurrences(dxf, 'LINE');
+        expect(total).toBeGreaterThanOrEqual(15);
+        expect(total).toBeLessThanOrEqual(35);
     });
 
-    it('R 端 (round) は ARC エンティティで出力される', () => {
-        const dxf = generateDxf({
-            ...baseInput,
-            frontEndShape: 'round',
-            rearEndShape: 'round',
-            // tipR=2.9, baseR=3.5, dr=0.6 ≒ taperLen=1 にする
-            frontTaperLength: 0.6,
-            rearTaperLength: 0.6,
-        });
-        expect(countOccurrences(dxf, 'ARC')).toBeGreaterThanOrEqual(2);
-    });
-
-    it('カット有無に関わらず LWPOLYLINE は使わない (カスタム輪郭以外)', () => {
-        const dxfNoCut = generateDxf({ ...baseInput, cuts: [] });
-        expect(countOccurrences(dxfNoCut, 'LWPOLYLINE')).toBe(0);
-
-        const dxfWithCut = generateDxf({
+    it('リングカット 1 本でも複数本でも全て反映される', () => {
+        // 単一リング
+        const single = generateDxf({
             ...baseInput,
             cuts: [{
-                id: 'c1', type: 'ring', startZ: 15, endZ: 25,
-                properties: { pitch: 1.0, depth: 0.5, cutWidth: 0.5 },
+                id: 'c1', type: 'ring', startZ: 17, endZ: 27,
+                properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.5 },
             }],
         });
-        expect(countOccurrences(dxfWithCut, 'LWPOLYLINE')).toBe(0);
+        const singleCount = countOccurrences(single, 'LINE');
+
+        // 2 つのリング (異なる位置)
+        const dual = generateDxf({
+            ...baseInput,
+            cuts: [
+                { id: 'c1', type: 'ring', startZ: 11, endZ: 21,
+                  properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.5 } },
+                { id: 'c2', type: 'ring', startZ: 25, endZ: 35,
+                  properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.5 } },
+            ],
+        });
+        const dualCount = countOccurrences(dual, 'LINE');
+
+        // 2 本目のカットが追加されると LINE 数も増える (両方反映されている証左)
+        expect(dualCount).toBeGreaterThan(singleCount);
     });
 
-    it('リングカットが矩形溝として LINE で出力される (1周期 = 4 LINE)', () => {
-        // pitch=1, count=10 周期 → 各周期 4 LINE × 上下対称 = 80 + 中心軸/端面/穴/寸法 ≈ 多数
-        const dxf = generateDxf({
+    it('カットがテーパー領域に配置されても DXF に反映される', () => {
+        const noCut = generateDxf(baseInput);
+        const noCutCount = countOccurrences(noCut, 'LINE');
+
+        // フロントテーパー領域 [0, 10] にカット
+        const taperCut = generateDxf({
             ...baseInput,
             cuts: [{
-                id: 'c1', type: 'ring', startZ: 15, endZ: 25,
-                properties: { pitch: 1.0, depth: 0.5, cutWidth: 0.5 },
+                id: 'c1', type: 'ring', startZ: 2, endZ: 8,
+                properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.5 },
             }],
         });
-        // カット部分だけで 10 周期 × 4 本 × 上下 = 80 LINE 程度
-        // 加えて本体 land、前後テーパー、端面、穴等
-        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(80);
+        const taperCutCount = countOccurrences(taperCut, 'LINE');
+
+        // テーパー領域のカットも LINE が追加される
+        expect(taperCutCount).toBeGreaterThan(noCutCount);
     });
 
-    it('スカラップ (sin 波) は 32 分割の細かい LINE で再現される', () => {
+    it('異なる種類のカットが全て LINE として出力される', () => {
         const dxf = generateDxf({
             ...baseInput,
-            cuts: [{
-                id: 'c1', type: 'scallop', startZ: 15, endZ: 17,
-                properties: { pitch: 2.0, depth: 0.5, cutWidth: 2.0 },
-            }],
+            cuts: [
+                { id: 'r', type: 'ring', startZ: 11, endZ: 16,
+                  properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.5 } },
+                { id: 's', type: 'scallop', startZ: 20, endZ: 26,
+                  properties: { pitch: 2.0, depth: 0.4, cutWidth: 2.0 } },
+                { id: 'c', type: 'canyon', startZ: 28, endZ: 33,
+                  properties: { pitch: 1.0, depth: 0.4, cutWidth: 1.0 } },
+            ],
         });
-        // 1 周期だけ × 32 セグメント × 上下 = 64 LINE 以上
-        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(64);
+        // 3 種類のカット全てが反映 → LINE 数が単一カットより明確に多い
+        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(60);
+        // CUT_LABEL TEXT も 3 つ
+        expect(dxf).toContain('ring');
+        expect(dxf).toContain('scallop');
+        expect(dxf).toContain('canyon');
     });
 
     it('全長と最大径のテキスト寸法が含まれる', () => {
@@ -134,21 +146,6 @@ describe('generateDxf', () => {
     it('未定義素材は密度表示にフォールバック', () => {
         const dxf = generateDxf({ ...baseInput, materialDensity: 12.5 });
         expect(dxf).toContain('Density 12.5 g/cm3');
-    });
-
-    it('カットがある場合 CUT_LABEL TEXT が含まれる', () => {
-        const dxf = generateDxf({
-            ...baseInput,
-            cuts: [{
-                id: 'c1',
-                type: 'ring',
-                startZ: 10,
-                endZ: 20,
-                properties: { pitch: 1.0, depth: 0.5, cutWidth: 0.5 },
-            }],
-        });
-        expect(dxf).toContain('CUT_LABEL');
-        expect(dxf).toContain('ring');
     });
 
     it('縦カットは断面図に注釈しない (3D固有)', () => {
@@ -170,7 +167,6 @@ describe('generateDxf', () => {
         const entitiesIdx = dxf.indexOf('ENTITIES');
         const objectsIdx = dxf.indexOf('OBJECTS');
         const entitiesPart = dxf.substring(entitiesIdx, objectsIdx > 0 ? objectsIdx : dxf.length);
-        // ENTITIES セクション内に HOLES レイヤー指定 (group code 8) は無い
         expect(/\b8\b\s*\n\s*HOLES\b/m.test(entitiesPart)).toBe(false);
     });
 });

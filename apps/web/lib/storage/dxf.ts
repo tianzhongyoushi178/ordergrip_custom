@@ -2,9 +2,7 @@
  * バレル形状を AutoCAD 互換の DXF として書き出す。
  *
  * 出力エンティティ:
- *  - LINE          : 中心軸 / 端面 / 寸法線 / カット位置マーカー / 寸法引出線
- *  - ARC           : 前後端の R 形状 (frontEndShape='round' / rearEndShape='round')
- *  - LWPolyline    : 本体プロファイル (2D 軽量ポリライン), 穴 (矩形)
+ *  - LINE          : 中心軸 / 端面 / 寸法線 / カット位置マーカー / 寸法引出線 / 外形輪郭
  *  - TEXT          : 寸法ラベル / カット種別ラベル / 素材名
  *
  * レイヤー:
@@ -16,17 +14,22 @@
  *
  * 座標系: AutoCAD 標準 (X 右, Y 上)。中心軸 = X 軸 (Y=0)。
  *         X=0 が左端 (チップ側), X=length が右端 (シャフト側)。
+ *
+ * 輪郭の生成方針:
+ *  - generator.ts の同じプロファイル関数 (3D モデルと共有) を使用し、忠実に再現
+ *  - 連続する共線な点は単一 LINE にまとめる (同じ傾きの線分を 1 本に統合)
+ *  - その結果、平坦な land は LINE 1 本、矩形カットの直線部分は最小数の LINE で表現
+ *  - カットがどこに配置されていても (タングテーパー領域含む) 正しく反映される
  */
 
-import { DxfWriter, Colors, point2d, point3d, Units } from '@tarikjabiri/dxf';
+import { DxfWriter, Colors, point3d, Units } from '@tarikjabiri/dxf';
 import type { BarrelState } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
-import { cutPeriodVertices } from '@/lib/storage/cutShape';
 
 const HOLE_RADIUS = 2.1;
-const TIP_RADIUS = 2.9;
-const THREAD_RADIUS = 2.9;
 const EPSILON = 1e-6;
+/** 共線判定の閾値: 外積の絶対値がこれ未満なら同一直線とみなす */
+const COLLINEAR_TOLERANCE = 1e-6;
 
 /** ORDER GRIP 公式 LINE アカウントの友だち追加 URL */
 export const OFFICIAL_LINE_URL = 'https://lin.ee/wdJWNNK';
@@ -55,33 +58,36 @@ const materialName = (density: number): string => {
     }
 };
 
-/**
- * 中心側の前面/後面端の半径。custom outline がある場合はその先頭/末尾の半径を採用、
- * なければ既定 (TIP_RADIUS / THREAD_RADIUS) を返す。
- */
-const endRadii = (input: DxfBarrelInput): { tip: number; thread: number } => {
-    if (input.outline.length > 1) {
-        const sorted = [...input.outline].sort((a, b) => a.z - b.z);
-        return {
-            tip: sorted[0].d / 2,
-            thread: sorted[sorted.length - 1].d / 2,
-        };
-    }
-    return { tip: TIP_RADIUS, thread: THREAD_RADIUS };
-};
+interface Pt2D {
+    z: number;
+    r: number;
+}
 
 /**
- * profile2D 配列 ({ x: z, y: r }) から指定の z 範囲内の点だけ抽出する。
+ * 隣接する共線点を統合して単純化した頂点列を返す。
+ * 例: [(0,0), (1,0), (2,0), (3,0)] → [(0,0), (3,0)] (中間 2 点は同一直線上のため除去)
  */
-const sliceProfile = (
-    profile2D: ReadonlyArray<{ x: number; y: number }>,
-    zStart: number,
-    zEnd: number,
-): { x: number; y: number }[] => {
-    // profile2D points: { x: z, y: r } (x が軸方向, y が半径)
-    return profile2D
-        .filter((p) => p.x >= zStart - EPSILON && p.x <= zEnd + EPSILON)
-        .map((p) => ({ x: p.x, y: p.y }));
+const simplifyCollinear = (points: ReadonlyArray<Pt2D>): Pt2D[] => {
+    if (points.length <= 2) return [...points];
+    const out: Pt2D[] = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+        const a = out[out.length - 1];
+        const b = points[i];
+        const c = points[i + 1];
+        // a → b と a → c の外積。0 なら a, b, c は共線
+        const dz1 = b.z - a.z;
+        const dr1 = b.r - a.r;
+        const dz2 = c.z - a.z;
+        const dr2 = c.r - a.r;
+        const cross = dz1 * dr2 - dr1 * dz2;
+        if (Math.abs(cross) > COLLINEAR_TOLERANCE) {
+            // 共線でない → b を頂点として保持
+            out.push(b);
+        }
+        // 共線なら b は不要 (a → c のラインに吸収)
+    }
+    out.push(points[points.length - 1]);
+    return out;
 };
 
 export const generateDxf = (input: DxfBarrelInput): string => {
@@ -108,9 +114,9 @@ export const generateDxf = (input: DxfBarrelInput): string => {
 
     const baseR = input.maxDiameter / 2;
     const length = input.length;
-    const frontTaper = input.frontTaperLength;
-    const rearTaperStart = length - input.rearTaperLength;
-    const { tip: tipR, thread: threadR } = endRadii(input);
+
+    // profile points: { x: r, y: z } → (z, r) ペアに変換
+    const outlinePts: Pt2D[] = profile.map((p) => ({ z: p.y, r: p.x }));
 
     // ============================================================
     // 1. 中心軸 (LINE)
@@ -122,183 +128,42 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     );
 
     // ============================================================
-    // 2. 外形輪郭の構成
-    //    - 前端 / 後端: LINE (taper) または ARC (round)
-    //    - 本体: カットが無ければ LINE 1本、あれば LWPolyline
-    //    - 上下対称: 同じ処理を Y を反転して再実行
-    //    - 端面 (前/後): LINE で輪郭を閉じる
+    // 2. 外形輪郭 (上下対称, 全て LINE エンティティで構成)
+    //    プロファイルから共線な点をマージし、最小数の LINE で再現
     // ============================================================
-    const useCustomOutline = input.outline.length > 1;
-    const profile2D = profile.map((p) => ({ x: p.y, y: p.x })); // (z, r) に変換
+    const simplified = simplifyCollinear(outlinePts);
 
-    const emitFrontEnd = (sign: 1 | -1) => {
-        // チップ (0, sign*tipR) → ベース (frontTaper, sign*baseR)
-        if (useCustomOutline) {
-            // カスタム輪郭の場合は分解できないので polyline で出力
-            const seg = sliceProfile(profile2D, 0, frontTaper);
-            if (seg.length >= 2) {
-                dxf.addLWPolyline(
-                    seg.map((p) => ({ point: point2d(p.x, sign * p.y) })),
-                    { layerName: 'OUTLINE' },
-                );
-            }
-            return;
-        }
-        if (input.frontEndShape === 'round' && frontTaper > EPSILON) {
-            // R 形状: 楕円弧 = baseR - (baseR-tipR) * sqrt(1 - (z/L)^2)
-            // 中心 (frontTaper, sign*baseR), 半径 (baseR-tipR), 開始角度に応じた ARC
-            // ただし楕円弧は ELLIPSE エンティティ。簡易のため (baseR-tipR ≒ frontTaper の楕円) を
-            // 円弧で近似する。半径 r が baseR-tipR と frontTaper の小さい方なら円弧として正確。
-            // 一般には ELLIPSE が必要だが、ここでは ARC で近似 (バレル R は緩やかなため誤差は小さい)。
-            const dr = baseR - tipR;
-            // 円弧として: 中心 (frontTaper, sign*tipR), 半径 dr ではなく
-            // 中心 (frontTaper, sign*(baseR - dr)) = (frontTaper, sign*tipR), 半径 dr,
-            // 角度: チップ側端点 (0, sign*tipR) → 90度 (上半なら 180度開始から 90度終点)
-            // sign=+1: ARC center=(frontTaper, tipR), startAngle=180, endAngle=90 (CCW)
-            // sign=-1: ARC center=(frontTaper, -tipR), startAngle=270, endAngle=180 (CCW)
-            // 実際は楕円なので ELLIPSE 推奨。ここでは ARC で近似する。
-            if (Math.abs(dr - frontTaper) < 0.5) {
-                // 円弧として十分近い → ARC エンティティ
-                if (sign === 1) {
-                    dxf.addArc(point3d(frontTaper, tipR, 0), dr, 180, 90, { layerName: 'OUTLINE' });
-                } else {
-                    dxf.addArc(point3d(frontTaper, -tipR, 0), dr, 270, 180, { layerName: 'OUTLINE' });
-                }
-            } else {
-                // 楕円 → polyline で近似 (ELLIPSE は CAD 互換性が低い)
-                const seg = sliceProfile(profile2D, 0, frontTaper);
-                dxf.addLWPolyline(
-                    seg.map((p) => ({ point: point2d(p.x, sign * p.y) })),
-                    { layerName: 'OUTLINE' },
-                );
-            }
-        } else if (frontTaper > EPSILON) {
-            // テーパー: 単純な LINE
+    const emitOutline = (sign: 1 | -1) => {
+        for (let i = 0; i < simplified.length - 1; i++) {
+            const a = simplified[i];
+            const b = simplified[i + 1];
+            // 退化した線分 (同一点) は出力しない
+            if (Math.abs(a.z - b.z) < EPSILON && Math.abs(a.r - b.r) < EPSILON) continue;
             dxf.addLine(
-                point3d(0, sign * tipR, 0),
-                point3d(frontTaper, sign * baseR, 0),
+                point3d(a.z, sign * a.r, 0),
+                point3d(b.z, sign * b.r, 0),
                 { layerName: 'OUTLINE' },
             );
         }
     };
+    emitOutline(1);   // 上半 (Y > 0)
+    emitOutline(-1);  // 下半 (Y < 0)
 
-    const emitRearEnd = (sign: 1 | -1) => {
-        if (useCustomOutline) {
-            const seg = sliceProfile(profile2D, rearTaperStart, length);
-            if (seg.length >= 2) {
-                dxf.addLWPolyline(
-                    seg.map((p) => ({ point: point2d(p.x, sign * p.y) })),
-                    { layerName: 'OUTLINE' },
-                );
-            }
-            return;
-        }
-        if (input.rearEndShape === 'round' && input.rearTaperLength > EPSILON) {
-            const dr = baseR - threadR;
-            if (Math.abs(dr - input.rearTaperLength) < 0.5) {
-                if (sign === 1) {
-                    dxf.addArc(point3d(rearTaperStart, threadR, 0), dr, 0, 90, { layerName: 'OUTLINE' });
-                } else {
-                    dxf.addArc(point3d(rearTaperStart, -threadR, 0), dr, 270, 360, { layerName: 'OUTLINE' });
-                }
-            } else {
-                const seg = sliceProfile(profile2D, rearTaperStart, length);
-                dxf.addLWPolyline(
-                    seg.map((p) => ({ point: point2d(p.x, sign * p.y) })),
-                    { layerName: 'OUTLINE' },
-                );
-            }
-        } else if (input.rearTaperLength > EPSILON) {
-            dxf.addLine(
-                point3d(rearTaperStart, sign * baseR, 0),
-                point3d(length, sign * threadR, 0),
-                { layerName: 'OUTLINE' },
-            );
-        }
-    };
-
-    const emitBody = (sign: 1 | -1) => {
-        // カスタム輪郭の場合は generator のプロファイルを LWPolyline で出力
-        if (useCustomOutline) {
-            const seg = sliceProfile(profile2D, frontTaper, rearTaperStart);
-            if (seg.length >= 2) {
-                dxf.addLWPolyline(
-                    seg.map((p) => ({ point: point2d(p.x, sign * p.y) })),
-                    { layerName: 'OUTLINE' },
-                );
-            }
-            return;
-        }
-
-        // body 範囲と重なる非縦カットを startZ 順にソート
-        const sortedCuts = input.cuts
-            .filter((c) => c.type !== 'vertical' && c.endZ > frontTaper && c.startZ < rearTaperStart)
-            .slice()
-            .sort((a, b) => a.startZ - b.startZ);
-
-        let cursor = frontTaper;
-
-        const emitLine = (z1: number, r1: number, z2: number, r2: number) => {
-            // 同一点 (長さ 0) のセグメントは出力しない
-            if (Math.abs(z1 - z2) < EPSILON && Math.abs(r1 - r2) < EPSILON) return;
-            dxf.addLine(
-                point3d(z1, sign * r1, 0),
-                point3d(z2, sign * r2, 0),
-                { layerName: 'OUTLINE' },
-            );
-        };
-
-        for (const cut of sortedCuts) {
-            const cutStart = Math.max(cut.startZ, frontTaper);
-            const cutEnd = Math.min(cut.endZ, rearTaperStart);
-
-            // カット手前の land を 1 本の LINE で
-            if (cutStart > cursor + EPSILON) {
-                emitLine(cursor, baseR, cutStart, baseR);
-            }
-
-            // カット内: 各周期の頂点列を辿って LINE で連結
-            const pitch = cut.properties.pitch ?? 1.0;
-            const count = Math.max(0, Math.round((cutEnd - cutStart) / pitch));
-            for (let i = 0; i < count; i++) {
-                const cycleStart = cutStart + i * pitch;
-                const verts = cutPeriodVertices(cut, cycleStart, baseR);
-                for (let j = 0; j < verts.length - 1; j++) {
-                    const a = verts[j];
-                    const b = verts[j + 1];
-                    emitLine(a.z, a.r, b.z, b.r);
-                }
-            }
-
-            cursor = cutStart + count * pitch;
-        }
-
-        // 末尾の land
-        if (cursor < rearTaperStart - EPSILON) {
-            emitLine(cursor, baseR, rearTaperStart, baseR);
-        }
-    };
-
-    // 上半輪郭 (Y > 0)
-    emitFrontEnd(1);
-    emitBody(1);
-    emitRearEnd(1);
-
-    // 下半輪郭 (Y < 0)
-    emitFrontEnd(-1);
-    emitBody(-1);
-    emitRearEnd(-1);
-
-    // 端面 (LINE)
-    dxf.addLine(point3d(0, tipR, 0), point3d(0, -tipR, 0), { layerName: 'OUTLINE' });
-    dxf.addLine(point3d(length, threadR, 0), point3d(length, -threadR, 0), { layerName: 'OUTLINE' });
+    // 端面 (LINE) — 輪郭を閉じる
+    const tipR = simplified[0].r;
+    const threadR = simplified[simplified.length - 1].r;
+    if (tipR > EPSILON) {
+        dxf.addLine(point3d(0, tipR, 0), point3d(0, -tipR, 0), { layerName: 'OUTLINE' });
+    }
+    if (threadR > EPSILON) {
+        dxf.addLine(point3d(length, threadR, 0), point3d(length, -threadR, 0), { layerName: 'OUTLINE' });
+    }
 
     // ============================================================
-    // 3. 穴 (LINE 4本ずつで矩形を構成)
+    // 3. 穴 (LINE 4 本ずつで矩形を構成)
     // ============================================================
     if (input.holeDepthFront > 0) {
         const fh = input.holeDepthFront;
-        // 前穴: チップ側 (z=0) から内側 z=fh まで
         dxf.addLine(point3d(0, HOLE_RADIUS, 0), point3d(fh, HOLE_RADIUS, 0), { layerName: 'HOLES' });
         dxf.addLine(point3d(fh, HOLE_RADIUS, 0), point3d(fh, -HOLE_RADIUS, 0), { layerName: 'HOLES' });
         dxf.addLine(point3d(fh, -HOLE_RADIUS, 0), point3d(0, -HOLE_RADIUS, 0), { layerName: 'HOLES' });
