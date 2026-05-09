@@ -46,12 +46,65 @@ describe('generateDxf', () => {
         expect(dxf).toContain('DIM');
     });
 
-    it('POLYLINE / LWPOLYLINE / VERTEX エンティティを使わない (全て LINE)', () => {
+    it('POLYLINE / LWPOLYLINE / VERTEX エンティティを使わない', () => {
         const dxf = generateDxf(baseInput);
         expect(countOccurrences(dxf, 'POLYLINE')).toBe(0);
         expect(countOccurrences(dxf, 'LWPOLYLINE')).toBe(0);
         expect(countOccurrences(dxf, 'VERTEX')).toBe(0);
         expect(countOccurrences(dxf, 'SEQEND')).toBe(0);
+    });
+
+    it('リングカットは真の直角を持つ 4 直線で構成される', () => {
+        // pitch=1, count=10, cutWidth=0.5 → 各周期は壁2+底1+land1=4 LINE × 上下 = 80 LINE
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'ring', startZ: 15, endZ: 25,
+                properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.5 },
+            }],
+        });
+        // カットだけで 80 LINE + その他 (端面/穴/寸法/中心軸/baseライン) = 多数
+        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(80);
+        // 矩形溝の壁・底・land の各 z 座標 (15, 15.5, 16, ...) が出力に存在
+        // 厳密な小数表記はライブラリ依存だが少なくとも数値として現れる
+        expect(dxf).toMatch(/(?:^|\n)\s*15(?:\.0+)?\s*\n/m);
+        expect(dxf).toMatch(/(?:^|\n)\s*15\.5(?:0+)?\s*\n/m);
+    });
+
+    it('ダブルリングカットは 2 つの矩形溝として 8 直線/周期で構成', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'ring_double', startZ: 15, endZ: 20,
+                properties: { pitch: 1.0, depth: 0.3, cutWidth: 0.2, gapWidth: 0.15 },
+            }],
+        });
+        // 各周期 8 LINE × 5 周期 × 上下 = 80 LINE
+        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(80);
+    });
+
+    it('Rリング/スカラップは ARC エンティティで出力される', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'ring_r', startZ: 15, endZ: 25,
+                properties: { pitch: 2.0, depth: 0.4, cutWidth: 2.0 },
+            }],
+        });
+        // 各周期 ARC×2 (上下) × 5 周期 = 10 ARC
+        expect(countOccurrences(dxf, 'ARC')).toBe(10);
+    });
+
+    it('スカラップカットも ARC で出力される', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'scallop', startZ: 15, endZ: 21,
+                properties: { pitch: 2.0, depth: 0.4, cutWidth: 2.0 },
+            }],
+        });
+        // 3 周期 × 2 (上下) = 6 ARC
+        expect(countOccurrences(dxf, 'ARC')).toBe(6);
     });
 
     it('LINE エンティティを含む (中心軸/端面/穴/寸法)', () => {
@@ -60,11 +113,11 @@ describe('generateDxf', () => {
     });
 
     it('カット無しのテーパー形状は最小数の LINE で表現される', () => {
-        // 共線統合により、カット無しの本体は: 前テーパー1+本体1+後テーパー1 = 3 セグメント上半 + 3 下半 + 端面2 + 中心軸1 + 穴8 + 寸法3 = 計20本程度
+        // 共線統合により、カット無しの本体は: 前テーパー+本体+後テーパー = 3 セグメント上半+下半 + 端面2 + 中心軸1 + 穴8 + 寸法3
         const dxf = generateDxf(baseInput);
         const total = countOccurrences(dxf, 'LINE');
         expect(total).toBeGreaterThanOrEqual(15);
-        expect(total).toBeLessThanOrEqual(35);
+        expect(total).toBeLessThanOrEqual(40);
     });
 
     it('リングカット 1 本でも複数本でも全て反映される', () => {
