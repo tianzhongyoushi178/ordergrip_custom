@@ -16,6 +16,9 @@ import { generateProfile } from '@/lib/math/generator';
 
 const HOLE_RADIUS = 2.1; // 2BA ホール半径
 
+/** ORDER GRIP 公式 LINE アカウントの友だち追加 URL */
+export const OFFICIAL_LINE_URL = 'https://lin.ee/wdJWNNK';
+
 interface DxfBarrelInput {
     length: number;
     maxDiameter: number;
