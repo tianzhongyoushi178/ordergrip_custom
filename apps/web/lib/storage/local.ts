@@ -31,35 +31,6 @@ export const loadFromLocalStorage = (): Partial<BarrelState> | null => {
     }
 };
 
-export const exportToJson = (state: Partial<BarrelState>, filename: string = 'my-barrel.json') => {
-    const data = {
-        length: state.length,
-        maxDiameter: state.maxDiameter,
-        cuts: state.cuts,
-        materialDensity: state.materialDensity,
-        frontTaperLength: state.frontTaperLength,
-        rearTaperLength: state.rearTaperLength,
-        holeDepthFront: state.holeDepthFront,
-        holeDepthRear: state.holeDepthRear,
-        outline: state.outline,
-        shapeType: state.shapeType,
-        frontEndShape: state.frontEndShape,
-        rearEndShape: state.rearEndShape,
-        timestamp: new Date().toISOString()
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-};
-
 const isFiniteNumber = (v: unknown): v is number =>
     typeof v === 'number' && Number.isFinite(v);
 

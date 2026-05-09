@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
-import { saveToLocalStorage, loadFromLocalStorage, exportToJson, importFromJson, validateBarrelData, STORAGE_KEY } from '../storage/local';
+import { saveToLocalStorage, loadFromLocalStorage, importFromJson, validateBarrelData, STORAGE_KEY } from '../storage/local';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -106,55 +106,6 @@ describe('storage/local', () => {
       localStorageMock.setItem(STORAGE_KEY, 'invalid json{{{');
       const loaded = loadFromLocalStorage();
       expect(loaded).toBeNull();
-    });
-  });
-
-  // =========================================
-  // exportToJson
-  // =========================================
-  describe('exportToJson', () => {
-    it('正しいJSON Blobが生成される', () => {
-      const clickSpy = vi.fn();
-      const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((node) => node);
-      const removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation((node) => node);
-      const createObjectURLSpy = vi.fn(() => 'blob:test-url');
-      const revokeObjectURLSpy = vi.fn();
-      vi.stubGlobal('URL', { createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
-
-      const createElementOriginal = document.createElement.bind(document);
-      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-        const el = createElementOriginal(tag);
-        if (tag === 'a') {
-          el.click = clickSpy;
-        }
-        return el;
-      });
-
-      exportToJson({
-        length: 45,
-        maxDiameter: 7.0,
-        cuts: [],
-        materialDensity: 17.0,
-        frontTaperLength: 10,
-        rearTaperLength: 10,
-        holeDepthFront: 10,
-        holeDepthRear: 15,
-      });
-
-      expect(createObjectURLSpy).toHaveBeenCalled();
-      expect(clickSpy).toHaveBeenCalled();
-      expect(revokeObjectURLSpy).toHaveBeenCalled();
-      expect(appendChildSpy).toHaveBeenCalled();
-      expect(removeChildSpy).toHaveBeenCalled();
-
-      // Blobの内容を検証
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blobArg = (createObjectURLSpy.mock.calls as unknown as Blob[][])[0][0];
-      expect(blobArg).toBeInstanceOf(Blob);
-      expect(blobArg.type).toBe('application/json');
-
-      appendChildSpy.mockRestore();
-      removeChildSpy.mockRestore();
     });
   });
 
