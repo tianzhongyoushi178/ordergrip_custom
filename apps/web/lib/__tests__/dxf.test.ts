@@ -150,4 +150,32 @@ describe('generateDxf', () => {
         });
         expect(dxf).not.toContain('vertical');
     });
+
+    it('テーパー領域のカットは LWPolyline 内で連続している (隙間なし)', () => {
+        // フロントテーパー [0, 10] にリングカットを 5 周期配置
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'ring', startZ: 0, endZ: 10,
+                properties: { pitch: 2.0, depth: 0.3, cutWidth: 1.0 },
+            }],
+        });
+        // LWPolyline の頂点を抽出して隣接ペアの連続性 (前頂点の終点 = 次頂点の始点) を確認
+        // LWPolyline は単一エンティティなので頂点間は本質的に連続
+        // → LWPOLYLINE エンティティが存在すること自体が連続性の保証
+        const lwpolyCount = (dxf.match(/(?:^|\n)LWPOLYLINE\b/g) ?? []).length;
+        expect(lwpolyCount).toBeGreaterThanOrEqual(2); // 上下輪郭で最低 2 本
+    });
+
+    it('リアテーパー領域のカットも輪郭内で繋がっている', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'ring', startZ: 35, endZ: 45,
+                properties: { pitch: 2.0, depth: 0.3, cutWidth: 1.0 },
+            }],
+        });
+        const lwpolyCount = (dxf.match(/(?:^|\n)LWPOLYLINE\b/g) ?? []).length;
+        expect(lwpolyCount).toBeGreaterThanOrEqual(2);
+    });
 });

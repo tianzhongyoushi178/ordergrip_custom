@@ -180,160 +180,223 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         return simplifyCollinear(verts);
     };
 
-    /** カット 1 周期分の頂点列 (上半側、bulge は top arc 用) */
+    /**
+     * 3 点 P1, P2, P3 を通る円弧の bulge 値を計算する。
+     * P1 = 開始点、P3 = 終了点、P2 = 中間点 (この点を経由する弧)
+     * 戻り値: tan(中心角/4) に符号を付けたもの (LWPolyline 仕様)
+     *         P1→P3 が CCW で P2 を通る場合は正、CW なら負
+     */
+    const computeBulge = (P1: { z: number; r: number }, P2: { z: number; r: number }, P3: { z: number; r: number }): number => {
+        const dx = P3.z - P1.z;
+        const dy = P3.r - P1.r;
+        const ax = P2.z - P1.z;
+        const ay = P2.r - P1.r;
+        const chordLen = Math.sqrt(dx * dx + dy * dy);
+        if (chordLen < EPSILON) return 0;
+        // 2D cross product: 正なら P2 が P1→P3 の左、負なら右
+        const cross = dx * ay - dy * ax;
+        const sagitta = Math.abs(cross) / chordLen;
+        if (sagitta < EPSILON) return 0;
+        // bulge = 2 * sagitta / chord_length, 符号: P2 が CCW 側 (左) なら正、CW 側 (右) なら負
+        // ただし DXF では「弧が CCW 方向に進む」を正とする → P2 が右側で CCW (apex 経由で角度増加) になるケース
+        // 検証: 半円 (z=0→2, apex z=1,y=-1) では cross=2*-1-0*1=-2 (右側), 弧は CCW (角度 180→270→360) で bulge=+1
+        // → bulge_sign = -sign(cross)
+        return -Math.sign(cross) * 2 * sagitta / chordLen;
+    };
+
+    /** カット 1 周期分の頂点列 (上半側).
+     *  各頂点の r は baseRAt(z) を基準にしてテーパー傾斜に追従する。
+     *  これにより、カットがテーパー領域に入っても peak (land) が傾斜と平行で隙間が生じない。
+     */
     const getCutPeriodVertices = (cut: CutZone, cycleStart: number): Vertex[] => {
         const pitch = cut.properties.pitch ?? 1.0;
         const depth = cut.properties.depth ?? 0.5;
-        const peakR = baseRAt(cycleStart);
-        const valleyR = peakR - depth;
+        const cycleEnd = cycleStart + pitch;
+
+        // peak r は baseRAt(z) で各 z 位置の値を採用
+        // valley r は peak から depth だけ深い (baseRAt(z) - depth)
+        const peakAt = (z: number): number => baseRAt(z);
+        const valleyAt = (z: number): number => baseRAt(z) - depth;
 
         switch (cut.type) {
             case 'ring':
             case 'micro': {
                 const cw = Math.min(cut.properties.cutWidth ?? pitch * 0.5, pitch * 0.95);
+                const z1 = cycleStart;
+                const z2 = cycleStart + cw;
                 const verts: Vertex[] = [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart, r: valleyR, bulge: 0 },
-                    { z: cycleStart + cw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + cw, r: peakR, bulge: 0 },
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z1, r: valleyAt(z1), bulge: 0 },
+                    { z: z2, r: valleyAt(z2), bulge: 0 },
+                    { z: z2, r: peakAt(z2), bulge: 0 },
                 ];
                 if (pitch - cw > EPSILON) {
-                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                    verts.push({ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 });
                 }
                 return verts;
             }
             case 'ring_double': {
                 const cw = cut.properties.cutWidth ?? pitch * 0.2;
                 const gw = cut.properties.gapWidth ?? pitch * 0.15;
+                const z1 = cycleStart;
+                const z2 = cycleStart + cw;
+                const z3 = cycleStart + cw + gw;
+                const z4 = cycleStart + 2 * cw + gw;
                 const verts: Vertex[] = [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart, r: valleyR, bulge: 0 },
-                    { z: cycleStart + cw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + cw, r: peakR, bulge: 0 },
-                    { z: cycleStart + cw + gw, r: peakR, bulge: 0 },
-                    { z: cycleStart + cw + gw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 2 * cw + gw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 2 * cw + gw, r: peakR, bulge: 0 },
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z1, r: valleyAt(z1), bulge: 0 },
+                    { z: z2, r: valleyAt(z2), bulge: 0 },
+                    { z: z2, r: peakAt(z2), bulge: 0 },
+                    { z: z3, r: peakAt(z3), bulge: 0 },
+                    { z: z3, r: valleyAt(z3), bulge: 0 },
+                    { z: z4, r: valleyAt(z4), bulge: 0 },
+                    { z: z4, r: peakAt(z4), bulge: 0 },
                 ];
                 if (pitch - 2 * cw - gw > EPSILON) {
-                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                    verts.push({ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 });
                 }
                 return verts;
             }
             case 'ring_triple': {
                 const cw = cut.properties.cutWidth ?? pitch * 0.15;
                 const gw = cut.properties.gapWidth ?? pitch * 0.1;
+                const z1 = cycleStart;
+                const z2 = cycleStart + cw;
+                const z3 = cycleStart + cw + gw;
+                const z4 = cycleStart + 2 * cw + gw;
+                const z5 = cycleStart + 2 * cw + 2 * gw;
+                const z6 = cycleStart + 3 * cw + 2 * gw;
                 const verts: Vertex[] = [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart, r: valleyR, bulge: 0 },
-                    { z: cycleStart + cw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + cw, r: peakR, bulge: 0 },
-                    { z: cycleStart + cw + gw, r: peakR, bulge: 0 },
-                    { z: cycleStart + cw + gw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 2 * cw + gw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 2 * cw + gw, r: peakR, bulge: 0 },
-                    { z: cycleStart + 2 * cw + 2 * gw, r: peakR, bulge: 0 },
-                    { z: cycleStart + 2 * cw + 2 * gw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 3 * cw + 2 * gw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 3 * cw + 2 * gw, r: peakR, bulge: 0 },
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z1, r: valleyAt(z1), bulge: 0 },
+                    { z: z2, r: valleyAt(z2), bulge: 0 },
+                    { z: z2, r: peakAt(z2), bulge: 0 },
+                    { z: z3, r: peakAt(z3), bulge: 0 },
+                    { z: z3, r: valleyAt(z3), bulge: 0 },
+                    { z: z4, r: valleyAt(z4), bulge: 0 },
+                    { z: z4, r: peakAt(z4), bulge: 0 },
+                    { z: z5, r: peakAt(z5), bulge: 0 },
+                    { z: z5, r: valleyAt(z5), bulge: 0 },
+                    { z: z6, r: valleyAt(z6), bulge: 0 },
+                    { z: z6, r: peakAt(z6), bulge: 0 },
                 ];
                 if (pitch - 3 * cw - 2 * gw > EPSILON) {
-                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                    verts.push({ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 });
                 }
                 return verts;
             }
             case 'ring_r':
             case 'scallop': {
-                // 円弧: (z0, peakR) → (z0+aw, peakR), 中央で valleyR
-                // 円弧の中心角 = π - 2θ, θ = atan2(R-depth, aw/2), R = (aw² + 4*depth²)/(8*depth)
-                // bulge = tan(中心角 / 4)
+                // 3 点 (start, midpoint+depth, end) を通る円弧として bulge を計算
+                // テーパーの場合、start/end の r は異なるので chord は斜めになる
                 const aw = getActiveWidth(cut, pitch);
-                const R = (aw * aw + 4 * depth * depth) / (8 * depth);
-                const theta = Math.atan2(R - depth, aw / 2);
-                const includedAngle = Math.PI - 2 * theta;
-                const bulge = Math.tan(includedAngle / 4); // 上半 valley 円弧は CCW (正)
+                const z1 = cycleStart;
+                const z2 = cycleStart + aw / 2;
+                const z3 = cycleStart + aw;
+                const P1 = { z: z1, r: peakAt(z1) };
+                const P2 = { z: z2, r: valleyAt(z2) };
+                const P3 = { z: z3, r: peakAt(z3) };
+                const bulge = computeBulge(P1, P2, P3);
                 const verts: Vertex[] = [
-                    { z: cycleStart, r: peakR, bulge },         // 円弧開始
-                    { z: cycleStart + aw, r: peakR, bulge: 0 }, // 円弧終了
+                    { z: P1.z, r: P1.r, bulge },
+                    { z: P3.z, r: P3.r, bulge: 0 },
                 ];
                 if (pitch - aw > EPSILON) {
-                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                    verts.push({ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 });
                 }
                 return verts;
             }
             case 'ring_v': {
                 const aw = getActiveWidth(cut, pitch);
+                const z1 = cycleStart;
+                const z2 = cycleStart + aw / 2;
+                const z3 = cycleStart + aw;
                 return [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart + aw / 2, r: valleyR, bulge: 0 },
-                    { z: cycleStart + aw, r: peakR, bulge: 0 },
-                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z2, r: valleyAt(z2), bulge: 0 },
+                    { z: z3, r: peakAt(z3), bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 }] : []),
                 ];
             }
             case 'canyon': {
                 const aw = getActiveWidth(cut, pitch);
+                const z1 = cycleStart;
+                const z2 = cycleStart + 0.2 * aw;
+                const z3 = cycleStart + 0.8 * aw;
+                const z4 = cycleStart + aw;
                 return [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart + 0.2 * aw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 0.8 * aw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + aw, r: peakR, bulge: 0 },
-                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z2, r: valleyAt(z2), bulge: 0 },
+                    { z: z3, r: valleyAt(z3), bulge: 0 },
+                    { z: z4, r: peakAt(z4), bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 }] : []),
                 ];
             }
             case 'shark': {
                 const aw = getActiveWidth(cut, pitch);
+                const z1 = cycleStart;
+                const z2 = cycleStart + aw;
                 return [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart, r: valleyR, bulge: 0 },
-                    { z: cycleStart + aw, r: peakR, bulge: 0 },
-                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z1, r: valleyAt(z1), bulge: 0 },
+                    { z: z2, r: peakAt(z2), bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 }] : []),
                 ];
             }
             case 'wing': {
                 const aw = getActiveWidth(cut, pitch);
                 const verts: Vertex[] = [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart, r: valleyR, bulge: 0 },
+                    { z: cycleStart, r: peakAt(cycleStart), bulge: 0 },
+                    { z: cycleStart, r: valleyAt(cycleStart), bulge: 0 },
                 ];
                 const segments = 16;
                 for (let i = 1; i <= segments; i++) {
                     const f = i / segments;
+                    const z = cycleStart + f * aw;
                     const rOff = depth * (1 - Math.pow(f, 0.6));
-                    verts.push({ z: cycleStart + f * aw, r: peakR - rOff, bulge: 0 });
+                    verts.push({ z, r: peakAt(z) - rOff, bulge: 0 });
                 }
                 if (pitch - aw > EPSILON) {
-                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                    verts.push({ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 });
                 }
                 return verts;
             }
             case 'step': {
                 const aw = getActiveWidth(cut, pitch);
-                const midR = peakR - depth * 0.5;
+                const midOff = depth * 0.5;
+                const z1 = cycleStart;
+                const z2 = cycleStart + 0.3 * aw;
+                const z3 = cycleStart + 0.6 * aw;
+                const z4 = cycleStart + aw;
                 return [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart + 0.3 * aw, r: peakR, bulge: 0 },
-                    { z: cycleStart + 0.3 * aw, r: midR, bulge: 0 },
-                    { z: cycleStart + 0.6 * aw, r: midR, bulge: 0 },
-                    { z: cycleStart + 0.6 * aw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + aw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + aw, r: peakR, bulge: 0 },
-                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z2, r: peakAt(z2), bulge: 0 },
+                    { z: z2, r: peakAt(z2) - midOff, bulge: 0 },
+                    { z: z3, r: peakAt(z3) - midOff, bulge: 0 },
+                    { z: z3, r: valleyAt(z3), bulge: 0 },
+                    { z: z4, r: valleyAt(z4), bulge: 0 },
+                    { z: z4, r: peakAt(z4), bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 }] : []),
                 ];
             }
             case 'stair': {
                 const aw = getActiveWidth(cut, pitch);
+                const z1 = cycleStart;
+                const z2 = cycleStart + 0.2 * aw;
+                const z3 = cycleStart + 0.5 * aw;
+                const z4 = cycleStart + 0.7 * aw;
                 return [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart + 0.2 * aw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 0.5 * aw, r: valleyR, bulge: 0 },
-                    { z: cycleStart + 0.7 * aw, r: peakR, bulge: 0 },
-                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z2, r: valleyAt(z2), bulge: 0 },
+                    { z: z3, r: valleyAt(z3), bulge: 0 },
+                    { z: z4, r: peakAt(z4), bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 }] : []),
                 ];
             }
             default:
                 return [
-                    { z: cycleStart, r: peakR, bulge: 0 },
-                    { z: cycleStart + pitch, r: peakR, bulge: 0 },
+                    { z: cycleStart, r: peakAt(cycleStart), bulge: 0 },
+                    { z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 },
                 ];
         }
     };
@@ -368,19 +431,17 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     }
 
     // ============================================================
-    // 4. 下半輪郭 = 上半輪郭をミラー (r 反転、頂点逆順、bulge 符号反転)
+    // 4. 下半輪郭 = 上半輪郭をミラー (r 反転、頂点逆順)
+    //    bulge 符号: ミラー (CCW→CW で符号反転) と逆順走査 (CW→CCW で符号反転)
+    //    の合計で符号は同じ (反転2回 = 元のまま)
     // ============================================================
     const bottomVerts: Vertex[] = [];
     for (let i = topVerts.length - 1; i >= 0; i--) {
         const v = topVerts[i];
-        // bulge は次の頂点に対して定義されるので、逆順時は前の頂点の bulge を反転して使う
-        // 上半: vert[i].bulge は vert[i] → vert[i+1] の弧
-        // 下半 (逆順): bottom[i'] → bottom[i'+1] (i' = N-1-i) は top[i] ← top[i-1] に対応
-        // bottom[i'].bulge = -top[i-1].bulge (または top[i].bulge を使う場合は注意)
-        //
-        // 実装: 単純化のため、逆順で bulge を「前の要素」から取る
+        // 下半 polyline で頂点 bottom[k] (k = N-1-i) の bulge は top の (i-1)→i のセグメントを
+        // 逆方向に走査したものに相当。ミラー+逆順により符号は維持される。
         const prevBulge = i > 0 ? topVerts[i - 1].bulge : 0;
-        bottomVerts.push({ z: v.z, r: -v.r, bulge: -prevBulge });
+        bottomVerts.push({ z: v.z, r: -v.r, bulge: prevBulge });
     }
     if (bottomVerts.length >= 2) {
         dxf.addLWPolyline(
