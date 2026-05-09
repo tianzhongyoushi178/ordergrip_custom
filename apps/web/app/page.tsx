@@ -2,13 +2,9 @@
 
 import { Scene } from '@/components/canvas/Scene';
 import { Editor } from '@/components/features/Editor';
-import { AdModal } from '@/components/features/AdModal';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
-import { AdGateProvider, useAdGate } from '@/lib/hooks/useAdGate';
 
-function PageBody() {
-  const { showAd, dismissAd } = useAdGate();
-
+export default function Home() {
   return (
     <main className="flex flex-col md:block relative w-full h-[100dvh] bg-zinc-950 overflow-hidden">
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
@@ -64,16 +60,6 @@ function PageBody() {
       {/* UI Overlay */}
       {/* Editor component handles its own sizing (h-50vh on mobile, absolute sidebar on desktop) */}
       <Editor />
-
-      {showAd && <AdModal onClose={dismissAd} />}
     </main>
-  );
-}
-
-export default function Home() {
-  return (
-    <AdGateProvider>
-      <PageBody />
-    </AdGateProvider>
   );
 }

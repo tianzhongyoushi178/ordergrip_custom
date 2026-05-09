@@ -6,7 +6,6 @@ import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { saveToLocalStorage, loadFromLocalStorage } from '@/lib/storage/local';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
-import { useAdGate } from '@/lib/hooks/useAdGate';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
 import { CutSelector } from './CutSelector';
@@ -139,7 +138,6 @@ export const Editor = () => {
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
-    const { triggerAd } = useAdGate();
 
     // Add physics dependencies
     const physics = useMemo(() => {
@@ -906,7 +904,7 @@ export const Editor = () => {
                         ブラウザに保存
                     </button>
                     <button
-                        onClick={() => {
+                        onClick={async () => {
                             const dxfInput = {
                                 length, maxDiameter, cuts,
                                 frontTaperLength, rearTaperLength,
@@ -914,23 +912,20 @@ export const Editor = () => {
                                 outline, frontEndShape, rearEndShape,
                                 materialDensity,
                             };
-                            // 広告を表示し、ユーザーが閉じた後に DXF 共有処理を実行
-                            triggerAd(async () => {
-                                const shared = await shareDxf(dxfInput);
-                                if (!shared) {
-                                    // 共有非対応 (PC等) → ファイルダウンロード + 公式LINE誘導
-                                    exportToDxf(dxfInput);
-                                    const open = confirm(
-                                        'DXF をダウンロードしました。\n\n' +
-                                        'これから ORDER GRIP 公式 LINE を開きます。\n' +
-                                        '公式アカウントに友だち追加後、ダウンロードしたDXFファイルを添付して送信してください。\n\n' +
-                                        'OK で公式LINEを開きます。',
-                                    );
-                                    if (open) {
-                                        window.open(OFFICIAL_LINE_URL, '_blank', 'noopener,noreferrer');
-                                    }
+                            const shared = await shareDxf(dxfInput);
+                            if (!shared) {
+                                // 共有非対応 (PC等) → ファイルダウンロード + 公式LINE誘導
+                                exportToDxf(dxfInput);
+                                const open = confirm(
+                                    'DXF をダウンロードしました。\n\n' +
+                                    'これから ORDER GRIP 公式 LINE を開きます。\n' +
+                                    '公式アカウントに友だち追加後、ダウンロードしたDXFファイルを添付して送信してください。\n\n' +
+                                    'OK で公式LINEを開きます。',
+                                );
+                                if (open) {
+                                    window.open(OFFICIAL_LINE_URL, '_blank', 'noopener,noreferrer');
                                 }
-                            });
+                            }
                         }}
                         className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-opacity flex items-center justify-center gap-2"
                         data-testid="share-dxf-line"
@@ -940,18 +935,15 @@ export const Editor = () => {
                         </svg>
                         DXFを公式LINEに送る
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            triggerAd(() => {
-                                window.open(OFFICIAL_LINE_URL, '_blank', 'noopener,noreferrer');
-                            });
-                        }}
+                    <a
+                        href={OFFICIAL_LINE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="block w-full text-center text-xs text-zinc-500 hover:text-green-600 dark:hover:text-green-400 underline transition-colors"
                         data-testid="line-add-friend"
                     >
                         ORDER GRIP 公式LINEを友だち追加
-                    </button>
+                    </a>
                     <div className="flex gap-2">
                         <button
                             onClick={() => {
