@@ -4,9 +4,9 @@ import { Scene } from '@/components/canvas/Scene';
 import { Editor } from '@/components/features/Editor';
 import { AdModal } from '@/components/features/AdModal';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
-import { useAdGate } from '@/lib/hooks/useAdGate';
+import { AdGateProvider, useAdGate } from '@/lib/hooks/useAdGate';
 
-export default function Home() {
+function PageBody() {
   const { showAd, dismissAd } = useAdGate();
 
   return (
@@ -67,5 +67,13 @@ export default function Home() {
 
       {showAd && <AdModal onClose={dismissAd} />}
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <AdGateProvider>
+      <PageBody />
+    </AdGateProvider>
   );
 }
