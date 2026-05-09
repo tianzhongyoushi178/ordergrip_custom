@@ -18,9 +18,10 @@
  *         X=0 が左端 (チップ側), X=length が右端 (シャフト側)。
  */
 
-import { DxfWriter, Colors, point2d, point3d, Units, LWPolylineFlags } from '@tarikjabiri/dxf';
+import { DxfWriter, Colors, point2d, point3d, Units } from '@tarikjabiri/dxf';
 import type { BarrelState } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
+import { cutPeriodVertices } from '@/lib/storage/cutShape';
 
 const HOLE_RADIUS = 2.1;
 const TIP_RADIUS = 2.9;
@@ -52,14 +53,6 @@ const materialName = (density: number): string => {
         case 13.5: return 'Tungsten 70% (13.5 g/cm3)';
         default: return `Density ${density.toFixed(1)} g/cm3`;
     }
-};
-
-/**
- * カットがプロファイル領域 [zStart, zEnd] と重なるかどうか。
- * バレル本体 (前後テーパーの間) に該当するかを判定するために使用。
- */
-const hasCutInRange = (cuts: BarrelState['cuts'], zStart: number, zEnd: number): boolean => {
-    return cuts.some((c) => c.type !== 'vertical' && c.endZ > zStart && c.startZ < zEnd);
 };
 
 /**
@@ -225,16 +218,8 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     };
 
     const emitBody = (sign: 1 | -1) => {
-        const bodyHasCuts = hasCutInRange(input.cuts, frontTaper, rearTaperStart);
-        if (!bodyHasCuts && !useCustomOutline) {
-            // 平らなシリンダー本体: 1 本の LINE
-            dxf.addLine(
-                point3d(frontTaper, sign * baseR, 0),
-                point3d(rearTaperStart, sign * baseR, 0),
-                { layerName: 'OUTLINE' },
-            );
-        } else {
-            // カットあり / カスタム輪郭 → LWPolyline (2D)
+        // カスタム輪郭の場合は generator のプロファイルを LWPolyline で出力
+        if (useCustomOutline) {
             const seg = sliceProfile(profile2D, frontTaper, rearTaperStart);
             if (seg.length >= 2) {
                 dxf.addLWPolyline(
@@ -242,6 +227,55 @@ export const generateDxf = (input: DxfBarrelInput): string => {
                     { layerName: 'OUTLINE' },
                 );
             }
+            return;
+        }
+
+        // body 範囲と重なる非縦カットを startZ 順にソート
+        const sortedCuts = input.cuts
+            .filter((c) => c.type !== 'vertical' && c.endZ > frontTaper && c.startZ < rearTaperStart)
+            .slice()
+            .sort((a, b) => a.startZ - b.startZ);
+
+        let cursor = frontTaper;
+
+        const emitLine = (z1: number, r1: number, z2: number, r2: number) => {
+            // 同一点 (長さ 0) のセグメントは出力しない
+            if (Math.abs(z1 - z2) < EPSILON && Math.abs(r1 - r2) < EPSILON) return;
+            dxf.addLine(
+                point3d(z1, sign * r1, 0),
+                point3d(z2, sign * r2, 0),
+                { layerName: 'OUTLINE' },
+            );
+        };
+
+        for (const cut of sortedCuts) {
+            const cutStart = Math.max(cut.startZ, frontTaper);
+            const cutEnd = Math.min(cut.endZ, rearTaperStart);
+
+            // カット手前の land を 1 本の LINE で
+            if (cutStart > cursor + EPSILON) {
+                emitLine(cursor, baseR, cutStart, baseR);
+            }
+
+            // カット内: 各周期の頂点列を辿って LINE で連結
+            const pitch = cut.properties.pitch ?? 1.0;
+            const count = Math.max(0, Math.round((cutEnd - cutStart) / pitch));
+            for (let i = 0; i < count; i++) {
+                const cycleStart = cutStart + i * pitch;
+                const verts = cutPeriodVertices(cut, cycleStart, baseR);
+                for (let j = 0; j < verts.length - 1; j++) {
+                    const a = verts[j];
+                    const b = verts[j + 1];
+                    emitLine(a.z, a.r, b.z, b.r);
+                }
+            }
+
+            cursor = cutStart + count * pitch;
+        }
+
+        // 末尾の land
+        if (cursor < rearTaperStart - EPSILON) {
+            emitLine(cursor, baseR, rearTaperStart, baseR);
         }
     };
 
@@ -318,9 +352,6 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         materialName(input.materialDensity),
         { layerName: 'DIM' },
     );
-
-    // 未使用の定数を ESLint に通すため (コンパイル時警告抑制)
-    void LWPolylineFlags;
 
     return dxf.stringify();
 };

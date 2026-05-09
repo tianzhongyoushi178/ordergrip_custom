@@ -80,25 +80,44 @@ describe('generateDxf', () => {
         expect(countOccurrences(dxf, 'ARC')).toBeGreaterThanOrEqual(2);
     });
 
-    it('カットが無く本体に特徴が無い場合 LWPOLYLINE は使わない (本体は LINE)', () => {
-        const dxf = generateDxf({ ...baseInput, cuts: [] });
-        // 本体に LWPOLYLINE は不要 → 1個も無いか、あっても少ない
-        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBe(0);
-    });
+    it('カット有無に関わらず LWPOLYLINE は使わない (カスタム輪郭以外)', () => {
+        const dxfNoCut = generateDxf({ ...baseInput, cuts: [] });
+        expect(countOccurrences(dxfNoCut, 'LWPOLYLINE')).toBe(0);
 
-    it('カットがある場合は本体を LWPOLYLINE で出力', () => {
-        const dxf = generateDxf({
+        const dxfWithCut = generateDxf({
             ...baseInput,
             cuts: [{
-                id: 'c1',
-                type: 'ring',
-                startZ: 15,
-                endZ: 25,
+                id: 'c1', type: 'ring', startZ: 15, endZ: 25,
                 properties: { pitch: 1.0, depth: 0.5, cutWidth: 0.5 },
             }],
         });
-        // 上下対称で 2 本以上
-        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBeGreaterThanOrEqual(2);
+        expect(countOccurrences(dxfWithCut, 'LWPOLYLINE')).toBe(0);
+    });
+
+    it('リングカットが矩形溝として LINE で出力される (1周期 = 4 LINE)', () => {
+        // pitch=1, count=10 周期 → 各周期 4 LINE × 上下対称 = 80 + 中心軸/端面/穴/寸法 ≈ 多数
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'ring', startZ: 15, endZ: 25,
+                properties: { pitch: 1.0, depth: 0.5, cutWidth: 0.5 },
+            }],
+        });
+        // カット部分だけで 10 周期 × 4 本 × 上下 = 80 LINE 程度
+        // 加えて本体 land、前後テーパー、端面、穴等
+        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(80);
+    });
+
+    it('スカラップ (sin 波) は 32 分割の細かい LINE で再現される', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'c1', type: 'scallop', startZ: 15, endZ: 17,
+                properties: { pitch: 2.0, depth: 0.5, cutWidth: 2.0 },
+            }],
+        });
+        // 1 周期だけ × 32 セグメント × 上下 = 64 LINE 以上
+        expect(countOccurrences(dxf, 'LINE')).toBeGreaterThan(64);
     });
 
     it('全長と最大径のテキスト寸法が含まれる', () => {
