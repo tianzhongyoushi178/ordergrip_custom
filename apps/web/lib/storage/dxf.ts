@@ -1,31 +1,24 @@
 /**
  * バレル形状を AutoCAD 互換の DXF として書き出す。
  *
- * 出力エンティティ:
- *  - LINE  : 中心軸 / 端面 / 寸法線 / 外形輪郭の直線部分 / 矩形カットの壁・底
- *  - ARC   : Rリング・スカラップカットの曲線部分 (円弧)
- *  - TEXT  : 寸法ラベル / カット種別ラベル / 素材名
+ * 出力エンティティ (OUTLINE レイヤー):
+ *  - LWPOLYLINE (上半輪郭): 0→length にかけて連続した 2D ポリライン。
+ *    - 矩形カット (ring/double/triple/micro): bulge=0 の頂点列で完全な直角を表現
+ *    - 曲線カット (ring_r/scallop): bulge 値で円弧 (CAD で ARC として認識される)
+ *  - LWPOLYLINE (下半輪郭): 上半をミラーした 2D ポリライン
+ *  - LINE (端面前): (0, tipR) ↔ (0, -tipR) で輪郭を閉じる
+ *  - LINE (端面後): (length, threadR) ↔ (length, -threadR) で輪郭を閉じる
  *
- * レイヤー:
- *  - OUTLINE   (白): 上下対称の輪郭
+ * その他レイヤー:
  *  - HOLES     (シアン): 前穴 / 後穴 (2BA)
  *  - CENTER    (赤): 中心軸
  *  - DIM       (黄): 全長 / 最大径 / 素材ラベル
  *  - CUT_LABEL (緑): カット位置注釈
  *
  * 座標系: AutoCAD 標準 (X 右, Y 上)。中心軸 = X 軸 (Y=0)。
- *
- * 輪郭の生成方針:
- *  1. baseProfile = カット無しのプロファイル (テーパー・本体のベース形状)
- *  2. 各カット領域では、カット種類に応じた厳密なプリミティブを発行:
- *     - 矩形系 (ring/micro/ring_double/ring_triple): 真の直角を持つ 4 LINE 矩形
- *     - 曲線系 (ring_r/scallop): ARC エンティティ (1 周期=1 円弧)
- *     - 角度系 (ring_v/canyon/shark/wing/step/stair): 形状に応じた LINE 群
- *  3. カット無しの z 範囲では baseProfile を共線統合した LINE で出力
- *  4. 上下対称: 同じ処理を Y 反転で再実行
  */
 
-import { DxfWriter, Colors, point3d, Units } from '@tarikjabiri/dxf';
+import { DxfWriter, Colors, point2d, point3d, Units, LWPolylineFlags } from '@tarikjabiri/dxf';
 import type { BarrelState, CutZone } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
 
@@ -60,15 +53,35 @@ const materialName = (density: number): string => {
     }
 };
 
-interface Pt2D { z: number; r: number }
+interface Vertex {
+    z: number;
+    r: number;
+    /**
+     * このフィールドが 0 以外なら、次の頂点までのセグメントは円弧として扱われる。
+     * bulge = tan(円弧の中心角 / 4)。正値=CCW、負値=CW (LWPolyline 仕様)。
+     */
+    bulge: number;
+}
 
-const simplifyCollinear = (points: ReadonlyArray<Pt2D>): Pt2D[] => {
-    if (points.length <= 2) return [...points];
-    const out: Pt2D[] = [points[0]];
-    for (let i = 1; i < points.length - 1; i++) {
+const getActiveWidth = (cut: CutZone, pitch: number): number => {
+    const aw = cut.properties.cutWidth;
+    if (aw !== undefined && aw < pitch) return aw;
+    return pitch;
+};
+
+/** 共線統合: 連続する共線な点を除去 (最初/最後は保持) */
+const simplifyCollinear = (verts: Vertex[]): Vertex[] => {
+    if (verts.length <= 2) return [...verts];
+    const out: Vertex[] = [verts[0]];
+    for (let i = 1; i < verts.length - 1; i++) {
         const a = out[out.length - 1];
-        const b = points[i];
-        const c = points[i + 1];
+        const b = verts[i];
+        const c = verts[i + 1];
+        // bulge が非ゼロなら円弧なので除去しない
+        if (Math.abs(a.bulge) > EPSILON || Math.abs(b.bulge) > EPSILON) {
+            out.push(b);
+            continue;
+        }
         const dz1 = b.z - a.z;
         const dr1 = b.r - a.r;
         const dz2 = c.z - a.z;
@@ -78,15 +91,23 @@ const simplifyCollinear = (points: ReadonlyArray<Pt2D>): Pt2D[] => {
             out.push(b);
         }
     }
-    out.push(points[points.length - 1]);
+    out.push(verts[verts.length - 1]);
     return out;
 };
 
-/** 非 groove 系カットの実効幅 (cutWidth が pitch 未満なら短縮、それ以外は pitch 全幅) */
-const getActiveWidth = (cut: CutZone, pitch: number): number => {
-    const aw = cut.properties.cutWidth;
-    if (aw !== undefined && aw < pitch) return aw;
-    return pitch;
+/** 重複頂点 (連続して同じ z, r) を除去 */
+const dedupVertices = (verts: Vertex[]): Vertex[] => {
+    const out: Vertex[] = [];
+    for (const v of verts) {
+        const last = out[out.length - 1];
+        if (!last || Math.abs(last.z - v.z) > EPSILON || Math.abs(last.r - v.r) > EPSILON) {
+            out.push(v);
+        } else {
+            // 同じ点なら bulge を引き継ぐ (新しい方を優先)
+            if (Math.abs(v.bulge) > EPSILON) last.bulge = v.bulge;
+        }
+    }
+    return out;
 };
 
 export const generateDxf = (input: DxfBarrelInput): string => {
@@ -94,21 +115,19 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     const baseProfile = generateProfile(
         input.length,
         input.maxDiameter,
-        [], // cuts なし
+        [],
         input.frontTaperLength,
         input.rearTaperLength,
         input.outline,
         input.frontEndShape,
         input.rearEndShape,
     );
-    const basePts: Pt2D[] = baseProfile.map((p) => ({ z: p.y, r: p.x }));
+    const basePts = baseProfile.map((p) => ({ z: p.y, r: p.x }));
 
-    /** baseProfile での z における半径 (線形補間) */
     const baseRAt = (z: number): number => {
         if (basePts.length === 0) return input.maxDiameter / 2;
         if (z <= basePts[0].z) return basePts[0].r;
         if (z >= basePts[basePts.length - 1].z) return basePts[basePts.length - 1].r;
-        // 二分探索
         let lo = 0, hi = basePts.length - 1;
         while (hi - lo > 1) {
             const mid = (lo + hi) >> 1;
@@ -123,7 +142,6 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     const dxf = new DxfWriter();
     dxf.setUnits(Units.Millimeters);
 
-    // レイヤー定義
     dxf.addLayer('OUTLINE', Colors.White, 'Continuous');
     dxf.addLayer('HOLES', Colors.Cyan, 'Continuous');
     dxf.addLayer('CENTER', Colors.Red, 'Continuous');
@@ -143,238 +161,237 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     );
 
     // ============================================================
-    // 2. 外形輪郭
+    // 2. 上半輪郭の頂点列を構築
     // ============================================================
-    const emitLineBoth = (z1: number, r1: number, z2: number, r2: number) => {
-        if (Math.abs(z1 - z2) < EPSILON && Math.abs(r1 - r2) < EPSILON) return;
-        dxf.addLine(point3d(z1, r1, 0), point3d(z2, r2, 0), { layerName: 'OUTLINE' });
-        dxf.addLine(point3d(z1, -r1, 0), point3d(z2, -r2, 0), { layerName: 'OUTLINE' });
-    };
-
-    /** baseProfile の [zStart, zEnd] 区間を共線統合 LINE で上下に出力 */
-    const emitBaseSegment = (zStart: number, zEnd: number) => {
-        if (zEnd - zStart < EPSILON) return;
-        const inRange = basePts.filter((p) => p.z >= zStart - EPSILON && p.z <= zEnd + EPSILON);
-        const points: Pt2D[] = [{ z: zStart, r: baseRAt(zStart) }, ...inRange, { z: zEnd, r: baseRAt(zEnd) }];
-        // 重複点除去
-        const dedup: Pt2D[] = [];
-        for (const p of points) {
-            const last = dedup[dedup.length - 1];
-            if (!last || Math.abs(last.z - p.z) > EPSILON) dedup.push(p);
-        }
-        const simplified = simplifyCollinear(dedup);
-        for (let i = 0; i < simplified.length - 1; i++) {
-            emitLineBoth(simplified[i].z, simplified[i].r, simplified[i + 1].z, simplified[i + 1].r);
-        }
-    };
-
-    /** 矩形溝 (4 直線で上下) を emit */
-    const emitRectGroove = (z0: number, cutWidth: number, totalLen: number, peakR: number, depth: number) => {
-        const valleyR = peakR - depth;
-        const cw = Math.min(cutWidth, totalLen - EPSILON);
-        // 上半: 左壁→底→右壁→ (land)
-        dxf.addLine(point3d(z0, peakR, 0), point3d(z0, valleyR, 0), { layerName: 'OUTLINE' });
-        dxf.addLine(point3d(z0, valleyR, 0), point3d(z0 + cw, valleyR, 0), { layerName: 'OUTLINE' });
-        dxf.addLine(point3d(z0 + cw, valleyR, 0), point3d(z0 + cw, peakR, 0), { layerName: 'OUTLINE' });
-        if (totalLen - cw > EPSILON) {
-            dxf.addLine(point3d(z0 + cw, peakR, 0), point3d(z0 + totalLen, peakR, 0), { layerName: 'OUTLINE' });
-        }
-        // 下半 (mirror)
-        dxf.addLine(point3d(z0, -peakR, 0), point3d(z0, -valleyR, 0), { layerName: 'OUTLINE' });
-        dxf.addLine(point3d(z0, -valleyR, 0), point3d(z0 + cw, -valleyR, 0), { layerName: 'OUTLINE' });
-        dxf.addLine(point3d(z0 + cw, -valleyR, 0), point3d(z0 + cw, -peakR, 0), { layerName: 'OUTLINE' });
-        if (totalLen - cw > EPSILON) {
-            dxf.addLine(point3d(z0 + cw, -peakR, 0), point3d(z0 + totalLen, -peakR, 0), { layerName: 'OUTLINE' });
-        }
-    };
-
-    /** Rリング・スカラップ用: 半サイン波形を ARC エンティティで近似 */
-    const emitArcGroove = (z0: number, aw: number, pitch: number, peakR: number, depth: number) => {
-        if (depth < EPSILON || aw < EPSILON) return;
-        // (z0, peakR), (z0+aw/2, peakR-depth), (z0+aw, peakR) を通る円弧
-        const R = (aw * aw + 4 * depth * depth) / (8 * depth);
-        // theta: チョード端からの中心へのベクトル角度 (degrees)
-        const theta = Math.atan2(R - depth, aw / 2) * 180 / Math.PI;
-
-        // 上半: 中心 (z0+aw/2, peakR - depth + R), arc は 180+θ → 360-θ (CCW, 270°経由で valley を通る)
-        const topCy = peakR - depth + R;
-        dxf.addArc(
-            point3d(z0 + aw / 2, topCy, 0),
-            R,
-            180 + theta,
-            360 - theta,
-            { layerName: 'OUTLINE' },
-        );
-
-        // 下半: 中心 (z0+aw/2, -topCy), arc は θ → 180-θ (CCW, 90°経由)
-        dxf.addArc(
-            point3d(z0 + aw / 2, -topCy, 0),
-            R,
-            theta,
-            180 - theta,
-            { layerName: 'OUTLINE' },
-        );
-
-        // land (アクティブ幅が pitch 未満の場合)
-        if (pitch - aw > EPSILON) {
-            emitLineBoth(z0 + aw, peakR, z0 + pitch, peakR);
-        }
-    };
-
-    /** 頂点列を LINE で連結 (上下対称). 隣接頂点のペアを LINE 化 */
-    const emitVertexPath = (verts: Pt2D[]) => {
-        for (let i = 0; i < verts.length - 1; i++) {
-            const a = verts[i], b = verts[i + 1];
-            emitLineBoth(a.z, a.r, b.z, b.r);
-        }
-    };
-
-    /** 1 周期分のカット形状を emit */
-    const emitCutPeriod = (cut: CutZone, cycleStart: number) => {
-        const pitch = cut.properties.pitch ?? 1.0;
-        const depth = cut.properties.depth ?? 0.5;
-        const peakR = baseRAt(cycleStart);
-
-        switch (cut.type) {
-            case 'ring':
-            case 'micro': {
-                const cw = Math.min(cut.properties.cutWidth ?? pitch * 0.5, pitch * 0.95);
-                emitRectGroove(cycleStart, cw, pitch, peakR, depth);
-                break;
-            }
-            case 'ring_double': {
-                const cw = cut.properties.cutWidth ?? pitch * 0.2;
-                const gw = cut.properties.gapWidth ?? pitch * 0.15;
-                // 1 つ目の溝 + gap (2 つ目までの land)
-                emitRectGroove(cycleStart, cw, cw + gw, peakR, depth);
-                // 2 つ目の溝 + 残り land
-                emitRectGroove(cycleStart + cw + gw, cw, pitch - cw - gw, peakR, depth);
-                break;
-            }
-            case 'ring_triple': {
-                const cw = cut.properties.cutWidth ?? pitch * 0.15;
-                const gw = cut.properties.gapWidth ?? pitch * 0.1;
-                emitRectGroove(cycleStart, cw, cw + gw, peakR, depth);
-                emitRectGroove(cycleStart + cw + gw, cw, cw + gw, peakR, depth);
-                emitRectGroove(cycleStart + 2 * (cw + gw), cw, pitch - 2 * (cw + gw), peakR, depth);
-                break;
-            }
-            case 'ring_r':
-            case 'scallop': {
-                const aw = getActiveWidth(cut, pitch);
-                emitArcGroove(cycleStart, aw, pitch, peakR, depth);
-                break;
-            }
-            case 'ring_v': {
-                const aw = getActiveWidth(cut, pitch);
-                emitVertexPath([
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart + aw / 2, r: peakR - depth },
-                    { z: cycleStart + aw, r: peakR },
-                    { z: cycleStart + pitch, r: peakR },
-                ]);
-                break;
-            }
-            case 'canyon': {
-                const aw = getActiveWidth(cut, pitch);
-                emitVertexPath([
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart + 0.2 * aw, r: peakR - depth },
-                    { z: cycleStart + 0.8 * aw, r: peakR - depth },
-                    { z: cycleStart + aw, r: peakR },
-                    { z: cycleStart + pitch, r: peakR },
-                ]);
-                break;
-            }
-            case 'shark': {
-                const aw = getActiveWidth(cut, pitch);
-                emitVertexPath([
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart, r: peakR - depth }, // 急下降
-                    { z: cycleStart + aw, r: peakR },     // ramp up
-                    { z: cycleStart + pitch, r: peakR },  // land
-                ]);
-                break;
-            }
-            case 'wing': {
-                const aw = getActiveWidth(cut, pitch);
-                const points: Pt2D[] = [
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart, r: peakR - depth },
-                ];
-                const segments = 16;
-                for (let i = 1; i <= segments; i++) {
-                    const f = i / segments;
-                    const rOff = depth * (1 - Math.pow(f, 0.6));
-                    points.push({ z: cycleStart + f * aw, r: peakR - rOff });
-                }
-                if (pitch - aw > EPSILON) {
-                    points.push({ z: cycleStart + pitch, r: peakR });
-                }
-                emitVertexPath(points);
-                break;
-            }
-            case 'step': {
-                const aw = getActiveWidth(cut, pitch);
-                const midR = peakR - depth * 0.5;
-                emitVertexPath([
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart + 0.3 * aw, r: peakR },
-                    { z: cycleStart + 0.3 * aw, r: midR },
-                    { z: cycleStart + 0.6 * aw, r: midR },
-                    { z: cycleStart + 0.6 * aw, r: peakR - depth },
-                    { z: cycleStart + aw, r: peakR - depth },
-                    { z: cycleStart + aw, r: peakR },
-                    { z: cycleStart + pitch, r: peakR },
-                ]);
-                break;
-            }
-            case 'stair': {
-                const aw = getActiveWidth(cut, pitch);
-                emitVertexPath([
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart + 0.2 * aw, r: peakR - depth },
-                    { z: cycleStart + 0.5 * aw, r: peakR - depth },
-                    { z: cycleStart + 0.7 * aw, r: peakR },
-                    { z: cycleStart + pitch, r: peakR },
-                ]);
-                break;
-            }
-            default:
-                emitVertexPath([
-                    { z: cycleStart, r: peakR },
-                    { z: cycleStart + pitch, r: peakR },
-                ]);
-                break;
-        }
-    };
-
-    // メインループ: カット領域とカット無し領域を交互に emit
     const sortedCuts = input.cuts
         .filter((c) => c.type !== 'vertical' && c.startZ < c.endZ)
         .slice()
         .sort((a, b) => a.startZ - b.startZ);
 
+    /** baseProfile の [zStart, zEnd] 区間の頂点を取得 (共線統合済み) */
+    const getBaseVertices = (zStart: number, zEnd: number): Vertex[] => {
+        if (zEnd - zStart < EPSILON) return [{ z: zStart, r: baseRAt(zStart), bulge: 0 }];
+        const inRange = basePts.filter((p) => p.z > zStart + EPSILON && p.z < zEnd - EPSILON);
+        const verts: Vertex[] = [
+            { z: zStart, r: baseRAt(zStart), bulge: 0 },
+            ...inRange.map((p) => ({ z: p.z, r: p.r, bulge: 0 })),
+            { z: zEnd, r: baseRAt(zEnd), bulge: 0 },
+        ];
+        return simplifyCollinear(verts);
+    };
+
+    /** カット 1 周期分の頂点列 (上半側、bulge は top arc 用) */
+    const getCutPeriodVertices = (cut: CutZone, cycleStart: number): Vertex[] => {
+        const pitch = cut.properties.pitch ?? 1.0;
+        const depth = cut.properties.depth ?? 0.5;
+        const peakR = baseRAt(cycleStart);
+        const valleyR = peakR - depth;
+
+        switch (cut.type) {
+            case 'ring':
+            case 'micro': {
+                const cw = Math.min(cut.properties.cutWidth ?? pitch * 0.5, pitch * 0.95);
+                const verts: Vertex[] = [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart, r: valleyR, bulge: 0 },
+                    { z: cycleStart + cw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + cw, r: peakR, bulge: 0 },
+                ];
+                if (pitch - cw > EPSILON) {
+                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                }
+                return verts;
+            }
+            case 'ring_double': {
+                const cw = cut.properties.cutWidth ?? pitch * 0.2;
+                const gw = cut.properties.gapWidth ?? pitch * 0.15;
+                const verts: Vertex[] = [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart, r: valleyR, bulge: 0 },
+                    { z: cycleStart + cw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + cw, r: peakR, bulge: 0 },
+                    { z: cycleStart + cw + gw, r: peakR, bulge: 0 },
+                    { z: cycleStart + cw + gw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 2 * cw + gw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 2 * cw + gw, r: peakR, bulge: 0 },
+                ];
+                if (pitch - 2 * cw - gw > EPSILON) {
+                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                }
+                return verts;
+            }
+            case 'ring_triple': {
+                const cw = cut.properties.cutWidth ?? pitch * 0.15;
+                const gw = cut.properties.gapWidth ?? pitch * 0.1;
+                const verts: Vertex[] = [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart, r: valleyR, bulge: 0 },
+                    { z: cycleStart + cw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + cw, r: peakR, bulge: 0 },
+                    { z: cycleStart + cw + gw, r: peakR, bulge: 0 },
+                    { z: cycleStart + cw + gw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 2 * cw + gw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 2 * cw + gw, r: peakR, bulge: 0 },
+                    { z: cycleStart + 2 * cw + 2 * gw, r: peakR, bulge: 0 },
+                    { z: cycleStart + 2 * cw + 2 * gw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 3 * cw + 2 * gw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 3 * cw + 2 * gw, r: peakR, bulge: 0 },
+                ];
+                if (pitch - 3 * cw - 2 * gw > EPSILON) {
+                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                }
+                return verts;
+            }
+            case 'ring_r':
+            case 'scallop': {
+                // 円弧: (z0, peakR) → (z0+aw, peakR), 中央で valleyR
+                // 円弧の中心角 = π - 2θ, θ = atan2(R-depth, aw/2), R = (aw² + 4*depth²)/(8*depth)
+                // bulge = tan(中心角 / 4)
+                const aw = getActiveWidth(cut, pitch);
+                const R = (aw * aw + 4 * depth * depth) / (8 * depth);
+                const theta = Math.atan2(R - depth, aw / 2);
+                const includedAngle = Math.PI - 2 * theta;
+                const bulge = Math.tan(includedAngle / 4); // 上半 valley 円弧は CCW (正)
+                const verts: Vertex[] = [
+                    { z: cycleStart, r: peakR, bulge },         // 円弧開始
+                    { z: cycleStart + aw, r: peakR, bulge: 0 }, // 円弧終了
+                ];
+                if (pitch - aw > EPSILON) {
+                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                }
+                return verts;
+            }
+            case 'ring_v': {
+                const aw = getActiveWidth(cut, pitch);
+                return [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart + aw / 2, r: valleyR, bulge: 0 },
+                    { z: cycleStart + aw, r: peakR, bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                ];
+            }
+            case 'canyon': {
+                const aw = getActiveWidth(cut, pitch);
+                return [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart + 0.2 * aw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 0.8 * aw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + aw, r: peakR, bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                ];
+            }
+            case 'shark': {
+                const aw = getActiveWidth(cut, pitch);
+                return [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart, r: valleyR, bulge: 0 },
+                    { z: cycleStart + aw, r: peakR, bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                ];
+            }
+            case 'wing': {
+                const aw = getActiveWidth(cut, pitch);
+                const verts: Vertex[] = [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart, r: valleyR, bulge: 0 },
+                ];
+                const segments = 16;
+                for (let i = 1; i <= segments; i++) {
+                    const f = i / segments;
+                    const rOff = depth * (1 - Math.pow(f, 0.6));
+                    verts.push({ z: cycleStart + f * aw, r: peakR - rOff, bulge: 0 });
+                }
+                if (pitch - aw > EPSILON) {
+                    verts.push({ z: cycleStart + pitch, r: peakR, bulge: 0 });
+                }
+                return verts;
+            }
+            case 'step': {
+                const aw = getActiveWidth(cut, pitch);
+                const midR = peakR - depth * 0.5;
+                return [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart + 0.3 * aw, r: peakR, bulge: 0 },
+                    { z: cycleStart + 0.3 * aw, r: midR, bulge: 0 },
+                    { z: cycleStart + 0.6 * aw, r: midR, bulge: 0 },
+                    { z: cycleStart + 0.6 * aw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + aw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + aw, r: peakR, bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                ];
+            }
+            case 'stair': {
+                const aw = getActiveWidth(cut, pitch);
+                return [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart + 0.2 * aw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 0.5 * aw, r: valleyR, bulge: 0 },
+                    { z: cycleStart + 0.7 * aw, r: peakR, bulge: 0 },
+                    ...(pitch - aw > EPSILON ? [{ z: cycleStart + pitch, r: peakR, bulge: 0 }] : []),
+                ];
+            }
+            default:
+                return [
+                    { z: cycleStart, r: peakR, bulge: 0 },
+                    { z: cycleStart + pitch, r: peakR, bulge: 0 },
+                ];
+        }
+    };
+
+    // 上半輪郭を構築
+    let topVerts: Vertex[] = [];
     let cursor = 0;
     for (const cut of sortedCuts) {
-        if (cut.startZ < cursor - EPSILON) continue; // 重複は無視
-        // カット手前のベース区間
-        emitBaseSegment(cursor, cut.startZ);
+        if (cut.startZ < cursor - EPSILON) continue;
+        const baseSeg = getBaseVertices(cursor, cut.startZ);
+        topVerts.push(...baseSeg);
 
-        // カット周期
         const pitch = cut.properties.pitch ?? 1.0;
         const count = Math.max(0, Math.round((cut.endZ - cut.startZ) / pitch));
         for (let i = 0; i < count; i++) {
             const cycleStart = cut.startZ + i * pitch;
-            emitCutPeriod(cut, cycleStart);
+            topVerts.push(...getCutPeriodVertices(cut, cycleStart));
         }
-
         cursor = cut.startZ + count * pitch;
     }
-    // 末尾のベース区間
-    emitBaseSegment(cursor, length);
+    topVerts.push(...getBaseVertices(cursor, length));
+    topVerts = dedupVertices(topVerts);
 
-    // 端面 (LINE) — 輪郭を閉じる
+    // ============================================================
+    // 3. 上半輪郭を LWPolyline として出力
+    // ============================================================
+    if (topVerts.length >= 2) {
+        dxf.addLWPolyline(
+            topVerts.map((v) => ({ point: point2d(v.z, v.r), bulge: v.bulge })),
+            { layerName: 'OUTLINE', flags: LWPolylineFlags.None },
+        );
+    }
+
+    // ============================================================
+    // 4. 下半輪郭 = 上半輪郭をミラー (r 反転、頂点逆順、bulge 符号反転)
+    // ============================================================
+    const bottomVerts: Vertex[] = [];
+    for (let i = topVerts.length - 1; i >= 0; i--) {
+        const v = topVerts[i];
+        // bulge は次の頂点に対して定義されるので、逆順時は前の頂点の bulge を反転して使う
+        // 上半: vert[i].bulge は vert[i] → vert[i+1] の弧
+        // 下半 (逆順): bottom[i'] → bottom[i'+1] (i' = N-1-i) は top[i] ← top[i-1] に対応
+        // bottom[i'].bulge = -top[i-1].bulge (または top[i].bulge を使う場合は注意)
+        //
+        // 実装: 単純化のため、逆順で bulge を「前の要素」から取る
+        const prevBulge = i > 0 ? topVerts[i - 1].bulge : 0;
+        bottomVerts.push({ z: v.z, r: -v.r, bulge: -prevBulge });
+    }
+    if (bottomVerts.length >= 2) {
+        dxf.addLWPolyline(
+            bottomVerts.map((v) => ({ point: point2d(v.z, v.r), bulge: v.bulge })),
+            { layerName: 'OUTLINE', flags: LWPolylineFlags.None },
+        );
+    }
+
+    // ============================================================
+    // 5. 端面 (LINE) — 輪郭を閉じる
+    // ============================================================
     const tipR = baseRAt(0);
     const threadR = baseRAt(length);
     if (tipR > EPSILON) {
@@ -385,25 +402,35 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     }
 
     // ============================================================
-    // 3. 穴 (LINE 4 本ずつで矩形)
+    // 6. 穴 (LWPolyline 矩形) — それぞれ閉じた 1 つのポリライン
     // ============================================================
     if (input.holeDepthFront > 0) {
         const fh = input.holeDepthFront;
-        dxf.addLine(point3d(0, HOLE_RADIUS, 0), point3d(fh, HOLE_RADIUS, 0), { layerName: 'HOLES' });
-        dxf.addLine(point3d(fh, HOLE_RADIUS, 0), point3d(fh, -HOLE_RADIUS, 0), { layerName: 'HOLES' });
-        dxf.addLine(point3d(fh, -HOLE_RADIUS, 0), point3d(0, -HOLE_RADIUS, 0), { layerName: 'HOLES' });
-        dxf.addLine(point3d(0, -HOLE_RADIUS, 0), point3d(0, HOLE_RADIUS, 0), { layerName: 'HOLES' });
+        dxf.addLWPolyline(
+            [
+                { point: point2d(0, HOLE_RADIUS) },
+                { point: point2d(fh, HOLE_RADIUS) },
+                { point: point2d(fh, -HOLE_RADIUS) },
+                { point: point2d(0, -HOLE_RADIUS) },
+            ],
+            { layerName: 'HOLES', flags: LWPolylineFlags.Closed },
+        );
     }
     if (input.holeDepthRear > 0) {
         const start = length - input.holeDepthRear;
-        dxf.addLine(point3d(start, HOLE_RADIUS, 0), point3d(length, HOLE_RADIUS, 0), { layerName: 'HOLES' });
-        dxf.addLine(point3d(length, HOLE_RADIUS, 0), point3d(length, -HOLE_RADIUS, 0), { layerName: 'HOLES' });
-        dxf.addLine(point3d(length, -HOLE_RADIUS, 0), point3d(start, -HOLE_RADIUS, 0), { layerName: 'HOLES' });
-        dxf.addLine(point3d(start, -HOLE_RADIUS, 0), point3d(start, HOLE_RADIUS, 0), { layerName: 'HOLES' });
+        dxf.addLWPolyline(
+            [
+                { point: point2d(start, HOLE_RADIUS) },
+                { point: point2d(length, HOLE_RADIUS) },
+                { point: point2d(length, -HOLE_RADIUS) },
+                { point: point2d(start, -HOLE_RADIUS) },
+            ],
+            { layerName: 'HOLES', flags: LWPolylineFlags.Closed },
+        );
     }
 
     // ============================================================
-    // 4. カット位置マーカー (LINE + TEXT)
+    // 7. カット位置マーカー (LINE + TEXT)
     // ============================================================
     const labelOffset = baseR + 4;
     for (const cut of input.cuts) {
@@ -416,7 +443,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     }
 
     // ============================================================
-    // 5. 寸法 (LINE + TEXT)
+    // 8. 寸法 (LINE + TEXT)
     // ============================================================
     const dimY = -baseR - 5;
     dxf.addLine(point3d(0, dimY, 0), point3d(length, dimY, 0), { layerName: 'DIM' });
@@ -452,22 +479,13 @@ export const exportToDxf = (input: DxfBarrelInput, filename?: string): void => {
     URL.revokeObjectURL(url);
 };
 
-/**
- * Web Share API で DXF を共有 (LINE 等を選択できる)。
- * Web Share Files 非対応環境では false を返す。
- */
 export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promise<boolean> => {
     const dxf = generateDxf(input);
     const name = filename ?? buildFilename();
     const file = new File([dxf], name, { type: 'application/dxf' });
-
     const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-    if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') {
-        return false;
-    }
-    if (!nav.canShare({ files: [file] })) {
-        return false;
-    }
+    if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return false;
+    if (!nav.canShare({ files: [file] })) return false;
     try {
         await nav.share({
             files: [file],
