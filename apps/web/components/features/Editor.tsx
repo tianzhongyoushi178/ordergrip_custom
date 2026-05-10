@@ -912,20 +912,28 @@ export const Editor = () => {
                                 outline, frontEndShape, rearEndShape,
                                 materialDensity,
                             };
-                            const shared = await shareDxf(dxfInput);
-                            if (!shared) {
-                                // 共有非対応 (PC等) → ファイルダウンロード + 公式LINE誘導
+                            const result = await shareDxf(dxfInput);
+                            if (result.status === 'failed') {
+                                // アップロード失敗 → ローカルダウンロードにフォールバック
                                 exportToDxf(dxfInput);
+                                alert(
+                                    `アップロードに失敗しました: ${result.error}\n\n` +
+                                    'DXF をダウンロードしました。LINE 公式アカウントに添付してください。',
+                                );
+                                return;
+                            }
+                            if (result.status === 'clipboard') {
                                 const open = confirm(
-                                    'DXF をダウンロードしました。\n\n' +
-                                    'これから ORDER GRIP 公式 LINE を開きます。\n' +
-                                    '公式アカウントに友だち追加後、ダウンロードしたDXFファイルを添付して送信してください。\n\n' +
+                                    `DXFを30日間有効なURLとしてアップロードしました:\n${result.url}\n\n` +
+                                    'クリップボードにコピー済みです。\n' +
+                                    'これから公式LINEを開きます。チャットに貼り付けて送信してください。\n\n' +
                                     'OK で公式LINEを開きます。',
                                 );
                                 if (open) {
                                     window.open(OFFICIAL_LINE_URL, '_blank', 'noopener,noreferrer');
                                 }
                             }
+                            // auto-line / web-share の場合は何もせず終了 (LINE が開いている)
                         }}
                         className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-opacity flex items-center justify-center gap-2"
                         data-testid="share-dxf-line"

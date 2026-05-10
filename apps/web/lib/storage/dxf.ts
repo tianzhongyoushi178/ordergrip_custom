@@ -29,6 +29,53 @@ const COLLINEAR_TOLERANCE = 1e-6;
 /** ORDER GRIP 公式 LINE アカウントの友だち追加 URL */
 export const OFFICIAL_LINE_URL = 'https://lin.ee/wdJWNNK';
 
+/**
+ * LINE 公式アカウントの Basic ID (例: '@123abcde').
+ * 設定されている場合、oaMessage deep link で 1 タップ送信が可能。
+ * NEXT_PUBLIC_LINE_OA_BASIC_ID 環境変数で上書き可能。
+ */
+const LINE_OA_BASIC_ID = process.env.NEXT_PUBLIC_LINE_OA_BASIC_ID ?? '';
+
+/**
+ * 0x0.st にファイルをアップロードして公開 URL を返す。
+ * 無料、登録不要、CORS 対応のファイルホスティングサービス。
+ * デフォルトで 30 日後に自動削除される。
+ */
+export const uploadDxfTemp = async (dxfContent: string, filename: string): Promise<string> => {
+    const blob = new Blob([dxfContent], { type: 'application/dxf' });
+    const formData = new FormData();
+    formData.append('file', blob, filename);
+    formData.append('expires', '720'); // 30 days in hours
+
+    const response = await fetch('https://0x0.st', {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error(`アップロード失敗: ${response.status} ${response.statusText}`);
+    }
+
+    const url = (await response.text()).trim();
+    if (!url.startsWith('http')) {
+        throw new Error(`予期しないレスポンス: ${url.slice(0, 100)}`);
+    }
+    return url;
+};
+
+/**
+ * 公式 LINE 宛の deep link を生成する。
+ * Basic ID が設定されていれば oaMessage 形式 (1 タップ送信)、未設定なら友だち追加 URL を返す。
+ */
+const buildLineDeepLink = (textMessage: string): string => {
+    if (LINE_OA_BASIC_ID) {
+        // Basic ID 形式: '@xxxxxx' から '@' を除いた基本 ID 部分が必要
+        const id = LINE_OA_BASIC_ID.startsWith('@') ? LINE_OA_BASIC_ID.slice(1) : LINE_OA_BASIC_ID;
+        return `https://line.me/R/oaMessage/@${id}/?${encodeURIComponent(textMessage)}`;
+    }
+    return OFFICIAL_LINE_URL;
+};
+
 interface DxfBarrelInput {
     length: number;
     maxDiameter: number;
@@ -525,22 +572,74 @@ export const exportToDxf = (input: DxfBarrelInput, filename?: string): void => {
     URL.revokeObjectURL(url);
 };
 
-export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promise<boolean> => {
+/**
+ * 共有結果のステータス。
+ * - 'auto-line': oaMessage deep link で公式 LINE のチャットを直接開いた (1 タップ送信)
+ * - 'web-share': Web Share API で OS のシェアシートを開いた (URL がプリフィルされる)
+ * - 'clipboard': URL をクリップボードにコピー + 友だち追加ページを開いた
+ * - 'failed':    アップロード自体に失敗した (通信エラー等)
+ */
+export type ShareResult =
+    | { status: 'auto-line'; url: string }
+    | { status: 'web-share'; url: string }
+    | { status: 'clipboard'; url: string }
+    | { status: 'failed'; error: string };
+
+/**
+ * DXF を 0x0.st にアップロードして、公式 LINE 宛にダウンロード URL を送信する。
+ *
+ * 1. DXF を生成
+ * 2. 0x0.st にアップロード (公開 URL 取得)
+ * 3. 環境変数 NEXT_PUBLIC_LINE_OA_BASIC_ID が設定されていれば、
+ *    oaMessage deep link で公式 LINE のチャットを URL プリフィルで自動オープン (1 タップ送信)
+ * 4. Basic ID 未設定でも Web Share API があれば URL を共有 (シェアシート経由)
+ * 5. 上記いずれもダメなら URL をクリップボードにコピーして友だち追加ページを開く
+ */
+export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promise<ShareResult> => {
     const dxf = generateDxf(input);
     const name = filename ?? buildFilename();
-    const file = new File([dxf], name, { type: 'application/dxf' });
-    const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-    if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return false;
-    if (!nav.canShare({ files: [file] })) return false;
+
+    // 1. アップロード
+    let url: string;
     try {
-        await nav.share({
-            files: [file],
-            title: 'バレル設計データ',
-            text: 'ORDER GRIP で作成したバレル設計図 (DXF) です。',
-        });
-        return true;
+        url = await uploadDxfTemp(dxf, name);
     } catch (err) {
-        if ((err as Error).name === 'AbortError') return true;
-        return false;
+        return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
     }
+
+    const message = `ORDER GRIP バレル設計データ\n${url}\n（30日間有効）`;
+
+    // 2. Basic ID あり → oaMessage deep link で 1 タップ送信
+    if (LINE_OA_BASIC_ID) {
+        const link = buildLineDeepLink(message);
+        window.open(link, '_blank', 'noopener,noreferrer');
+        return { status: 'auto-line', url };
+    }
+
+    // 3. Web Share API で URL を共有
+    const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+    if (typeof nav.share === 'function') {
+        try {
+            await nav.share({
+                title: 'ORDER GRIP バレル設計DXF',
+                text: message,
+                url,
+            });
+            return { status: 'web-share', url };
+        } catch (err) {
+            if ((err as Error).name !== 'AbortError') {
+                // Share がキャンセル以外の理由で失敗 → クリップボードフォールバック
+            } else {
+                return { status: 'web-share', url };
+            }
+        }
+    }
+
+    // 4. クリップボードにコピー + 友だち追加ページ
+    try {
+        await navigator.clipboard.writeText(message);
+    } catch {
+        // clipboard 失敗は致命的ではない
+    }
+    return { status: 'clipboard', url };
 };
