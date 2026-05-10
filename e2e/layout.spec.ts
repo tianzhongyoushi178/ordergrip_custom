@@ -82,13 +82,6 @@ const scrollIntoView = async (locator: Locator) => {
   });
 };
 
-const triggerAdModal = async (page: Page) => {
-  // Set the click counter to (interval - 1) so the next state change opens the ad
-  await page.evaluate(() => {
-    localStorage.setItem('orderGrip_changeCount', '9');
-  });
-};
-
 test.describe('SpecWizard - 極小ビューポート対応 (URL バー表示時)', () => {
   // iOS Safari の URL バー表示時を模した小さなビューポート（375x553）でも
   // Step 3 の％選択画面が完全に収まり、フッターまで操作できることを保証する。
@@ -254,11 +247,9 @@ test.describe('Editor (メイン画面) - 全画面対応', () => {
   });
 });
 
-test.describe('AdModal - 全画面対応', () => {
-  test('AdModal がビューポート内に収まり、フッターリンクに到達できる', async ({ page }) => {
+test.describe('LINE 連携ボタン', () => {
+  test('「DXFを公式LINEに送る」ボタンと「友だち追加」リンクが表示される', async ({ page }) => {
     await page.goto('/');
-
-    // wizard を閉じる
     const wizard = page.getByTestId('spec-wizard');
     await expect(wizard).toBeVisible({ timeout: 15_000 });
     await clickButtonAndExpect(
@@ -267,35 +258,16 @@ test.describe('AdModal - 全画面対応', () => {
       () => expect(wizard).toHaveCount(0, { timeout: 2_000 }),
     );
 
-    // 広告トリガーを発動
-    await triggerAdModal(page);
-
     const editor = page.getByTestId('editor-panel');
-    const lengthSlider = editor.locator('input[type="range"]').first();
-    await scrollIntoView(lengthSlider);
-    // React tracks input.value via property descriptor; we must use the native
-    // setter for React's onChange to fire reliably.
-    await lengthSlider.evaluate((el: HTMLInputElement) => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-      setter.call(el, '50');
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    // useAdGate debounces state updates with 300ms; allow the timer to fire.
-    await page.waitForTimeout(500);
+    const shareBtn = editor.getByTestId('share-dxf-line');
+    await scrollIntoView(shareBtn);
+    await expect(shareBtn).toBeVisible();
+    await expect(shareBtn).toContainText(/DXF.*LINE/);
 
-    const ad = page.getByTestId('ad-modal');
-    await expect(ad).toBeVisible({ timeout: 5_000 });
-
-    const dialog = ad.locator('> div > div').first();
-    const overflow = await elementWithinViewport(page, dialog);
-    expect(overflow.overflowsBottom, 'AdModal が下にはみ出している').toBeFalsy();
-    expect(overflow.overflowsTop, 'AdModal が上にはみ出している').toBeFalsy();
-    expect(overflow.overflowsRight).toBeFalsy();
-
-    const link = ad.getByRole('link', { name: /別タブで詳細を見る/ });
-    await scrollIntoView(link);
-    await expect(link).toBeVisible();
+    const friendLink = editor.getByTestId('line-add-friend');
+    await scrollIntoView(friendLink);
+    await expect(friendLink).toBeVisible();
+    await expect(friendLink).toHaveAttribute('href', /lin\.ee/);
   });
 });
 
