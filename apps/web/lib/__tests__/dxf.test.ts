@@ -53,13 +53,14 @@ describe('generateDxf', () => {
         expect(countOccurrences(dxf, 'SEQEND')).toBe(0);
     });
 
-    it('輪郭は連続した LWPolyline (上半 + 下半) として出力される', () => {
+    it('輪郭は単一の閉じた LWPolyline として出力される (トレランス無し)', () => {
         const dxf = generateDxf(baseInput);
-        // 上半 + 下半 + 穴 (前後) = 4 LWPolyline 以上
-        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBeGreaterThanOrEqual(4);
+        // 輪郭 1 本 + 穴 (前後 2 本) = 計 3 本以上の LWPOLYLINE
+        // 輪郭が単一の閉じたエンティティ → エンティティ間の隙間が原理的に存在しない
+        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBeGreaterThanOrEqual(3);
     });
 
-    it('カット有無に関わらず輪郭は LWPolyline で連結される', () => {
+    it('カット有無に関わらず輪郭は単一の連結エンティティ', () => {
         const noCut = generateDxf(baseInput);
         const withCut = generateDxf({
             ...baseInput,
@@ -68,13 +69,11 @@ describe('generateDxf', () => {
                 properties: { pitch: 2.0, depth: 0.3, cutWidth: 1.0 },
             }],
         });
-        // どちらも輪郭は 2 本の LWPolyline (上半・下半)
-        // カット有り版は頂点数が増える (LWPolyline 数自体は同じ)
-        expect(countOccurrences(noCut, 'LWPOLYLINE')).toBeGreaterThanOrEqual(4);
-        expect(countOccurrences(withCut, 'LWPOLYLINE')).toBeGreaterThanOrEqual(4);
+        expect(countOccurrences(noCut, 'LWPOLYLINE')).toBeGreaterThanOrEqual(3);
+        expect(countOccurrences(withCut, 'LWPOLYLINE')).toBeGreaterThanOrEqual(3);
     });
 
-    it('複数カットも単一 LWPolyline 内の頂点として連結される', () => {
+    it('複数カットも単一の閉じた輪郭内の頂点として連結される', () => {
         const dxf = generateDxf({
             ...baseInput,
             cuts: [
@@ -86,9 +85,8 @@ describe('generateDxf', () => {
                   properties: { pitch: 1.0, depth: 0.4, cutWidth: 1.0 } },
             ],
         });
-        // 異なる種類のカットでも、輪郭は 2 本の LWPolyline (上下) のまま
-        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBeGreaterThanOrEqual(4);
-        // カット種別のラベルは TEXT として全て含まれる
+        // 輪郭は 1 本の LWPolyline + 穴 2 本 = 計 3 本
+        expect(countOccurrences(dxf, 'LWPOLYLINE')).toBeGreaterThanOrEqual(3);
         expect(dxf).toContain('ring');
         expect(dxf).toContain('scallop');
         expect(dxf).toContain('canyon');
@@ -151,8 +149,7 @@ describe('generateDxf', () => {
         expect(dxf).not.toContain('vertical');
     });
 
-    it('テーパー領域のカットは LWPolyline 内で連続している (隙間なし)', () => {
-        // フロントテーパー [0, 10] にリングカットを 5 周期配置
+    it('テーパー領域のカットも単一輪郭エンティティ内に収まる (隙間ゼロ保証)', () => {
         const dxf = generateDxf({
             ...baseInput,
             cuts: [{
@@ -160,14 +157,12 @@ describe('generateDxf', () => {
                 properties: { pitch: 2.0, depth: 0.3, cutWidth: 1.0 },
             }],
         });
-        // LWPolyline の頂点を抽出して隣接ペアの連続性 (前頂点の終点 = 次頂点の始点) を確認
-        // LWPolyline は単一エンティティなので頂点間は本質的に連続
-        // → LWPOLYLINE エンティティが存在すること自体が連続性の保証
+        // 単一の閉じた LWPolyline + 穴 2 本 = 3 LWPolyline
         const lwpolyCount = (dxf.match(/(?:^|\n)LWPOLYLINE\b/g) ?? []).length;
-        expect(lwpolyCount).toBeGreaterThanOrEqual(2); // 上下輪郭で最低 2 本
+        expect(lwpolyCount).toBeGreaterThanOrEqual(3);
     });
 
-    it('リアテーパー領域のカットも輪郭内で繋がっている', () => {
+    it('リアテーパー領域のカットも単一輪郭内に収まる', () => {
         const dxf = generateDxf({
             ...baseInput,
             cuts: [{
@@ -176,6 +171,19 @@ describe('generateDxf', () => {
             }],
         });
         const lwpolyCount = (dxf.match(/(?:^|\n)LWPOLYLINE\b/g) ?? []).length;
-        expect(lwpolyCount).toBeGreaterThanOrEqual(2);
+        expect(lwpolyCount).toBeGreaterThanOrEqual(3);
+    });
+
+    it('輪郭 LWPolyline は Closed フラグ付きで出力される', () => {
+        const dxf = generateDxf(baseInput);
+        // LWPOLYLINE の閉じフラグは group code 70 の値 1 (LWPolylineFlags.Closed)
+        // OUTLINE レイヤーの LWPolyline が Closed であること
+        // フォーマット: LWPOLYLINE\n... \n70\n1 のパターンで OUTLINE レイヤーのものを探す
+        const entities = dxf.split(/(?=^LWPOLYLINE$)/m);
+        const outlinePolyline = entities.find((e) => /^\s*8\s*\n\s*OUTLINE\b/m.test(e));
+        expect(outlinePolyline).toBeTruthy();
+        if (outlinePolyline) {
+            expect(/^\s*70\s*\n\s*1\b/m.test(outlinePolyline)).toBe(true);
+        }
     });
 });

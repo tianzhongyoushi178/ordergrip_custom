@@ -421,45 +421,30 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     topVerts = dedupVertices(topVerts);
 
     // ============================================================
-    // 3. 上半輪郭を LWPolyline として出力
+    // 3. 全輪郭を 1 本の閉じた LWPolyline として出力
+    //    上半 → 後端面 → 下半 (逆順) → 前端面 (closed flag で自動)
+    //    単一エンティティのため、構成要素間のトレランス (隙間) が原理的に発生しない
     // ============================================================
-    if (topVerts.length >= 2) {
-        dxf.addLWPolyline(
-            topVerts.map((v) => ({ point: point2d(v.z, v.r), bulge: v.bulge })),
-            { layerName: 'OUTLINE', flags: LWPolylineFlags.None },
-        );
-    }
+    const closedOutline: Vertex[] = [];
 
-    // ============================================================
-    // 4. 下半輪郭 = 上半輪郭をミラー (r 反転、頂点逆順)
-    //    bulge 符号: ミラー (CCW→CW で符号反転) と逆順走査 (CW→CCW で符号反転)
-    //    の合計で符号は同じ (反転2回 = 元のまま)
-    // ============================================================
-    const bottomVerts: Vertex[] = [];
+    // 上半: z=0 → z=length
+    closedOutline.push(...topVerts);
+
+    // 後端面の下端: (length, -threadR). 上半の最後の頂点 (length, threadR) と直線で結ばれる
+    // 下半 (逆順, r 符号反転)
+    // bulge 符号は mirror+reverse で保持されるため、top の i-1 → i の bulge を bottom[N-1-i] の前頂点として保持
     for (let i = topVerts.length - 1; i >= 0; i--) {
         const v = topVerts[i];
-        // 下半 polyline で頂点 bottom[k] (k = N-1-i) の bulge は top の (i-1)→i のセグメントを
-        // 逆方向に走査したものに相当。ミラー+逆順により符号は維持される。
+        // 上半最後の頂点の bulge は使わない (後端面 LINE への直線). i=N-1 のとき bottom 最初の bulge=0
         const prevBulge = i > 0 ? topVerts[i - 1].bulge : 0;
-        bottomVerts.push({ z: v.z, r: -v.r, bulge: prevBulge });
-    }
-    if (bottomVerts.length >= 2) {
-        dxf.addLWPolyline(
-            bottomVerts.map((v) => ({ point: point2d(v.z, v.r), bulge: v.bulge })),
-            { layerName: 'OUTLINE', flags: LWPolylineFlags.None },
-        );
+        closedOutline.push({ z: v.z, r: -v.r, bulge: prevBulge });
     }
 
-    // ============================================================
-    // 5. 端面 (LINE) — 輪郭を閉じる
-    // ============================================================
-    const tipR = baseRAt(0);
-    const threadR = baseRAt(length);
-    if (tipR > EPSILON) {
-        dxf.addLine(point3d(0, tipR, 0), point3d(0, -tipR, 0), { layerName: 'OUTLINE' });
-    }
-    if (threadR > EPSILON) {
-        dxf.addLine(point3d(length, threadR, 0), point3d(length, -threadR, 0), { layerName: 'OUTLINE' });
+    if (closedOutline.length >= 2) {
+        dxf.addLWPolyline(
+            closedOutline.map((v) => ({ point: point2d(v.z, v.r), bulge: v.bulge })),
+            { layerName: 'OUTLINE', flags: LWPolylineFlags.Closed },
+        );
     }
 
     // ============================================================
