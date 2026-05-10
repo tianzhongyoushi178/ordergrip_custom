@@ -37,30 +37,38 @@ export const OFFICIAL_LINE_URL = 'https://lin.ee/wdJWNNK';
 const LINE_OA_BASIC_ID = process.env.NEXT_PUBLIC_LINE_OA_BASIC_ID ?? '';
 
 /**
- * 0x0.st にファイルをアップロードして公開 URL を返す。
- * 無料、登録不要、CORS 対応のファイルホスティングサービス。
+ * DXF を Next.js API ルート経由で一時ストレージにアップロードする。
+ *
+ * API ルート (/api/upload-dxf) がサーバーサイドで 0x0.st / transfer.sh に
+ * 転送するため、ブラウザ直結時に発生する CORS 制約と User-Agent ブロックを回避する。
  * デフォルトで 30 日後に自動削除される。
  */
 export const uploadDxfTemp = async (dxfContent: string, filename: string): Promise<string> => {
     const blob = new Blob([dxfContent], { type: 'application/dxf' });
     const formData = new FormData();
     formData.append('file', blob, filename);
-    formData.append('expires', '720'); // 30 days in hours
 
-    const response = await fetch('https://0x0.st', {
+    const response = await fetch('/api/upload-dxf', {
         method: 'POST',
         body: formData,
     });
 
     if (!response.ok) {
-        throw new Error(`アップロード失敗: ${response.status} ${response.statusText}`);
+        let detail = `${response.status} ${response.statusText}`;
+        try {
+            const errBody = await response.json();
+            if (errBody.error) detail = String(errBody.error);
+        } catch {
+            // body 解析失敗は無視
+        }
+        throw new Error(`アップロード失敗: ${detail}`);
     }
 
-    const url = (await response.text()).trim();
-    if (!url.startsWith('http')) {
-        throw new Error(`予期しないレスポンス: ${url.slice(0, 100)}`);
+    const body = await response.json();
+    if (typeof body.url !== 'string' || !body.url.startsWith('http')) {
+        throw new Error(`予期しないレスポンス: ${JSON.stringify(body).slice(0, 200)}`);
     }
-    return url;
+    return body.url;
 };
 
 /**
