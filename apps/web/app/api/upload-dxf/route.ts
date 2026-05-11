@@ -145,8 +145,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const errors: string[] = [];
         for (const provider of PROVIDERS) {
             try {
-                const url = await provider.upload(file);
-                return NextResponse.json({ url, provider: provider.name });
+                const rawUrl = await provider.upload(file);
+                // ダウンロードを強制するためのプロキシ URL を生成
+                // (一時ホスト先は text/plain で返してくるので、直接 URL を開くとブラウザに表示されてしまう)
+                const origin = req.nextUrl.origin;
+                const proxyUrl = new URL(`${origin}/api/download-dxf`);
+                proxyUrl.searchParams.set('u', rawUrl);
+                proxyUrl.searchParams.set('n', file.name);
+                return NextResponse.json({
+                    url: proxyUrl.toString(),
+                    rawUrl,
+                    provider: provider.name,
+                });
             } catch (err) {
                 errors.push(`${provider.name}: ${err instanceof Error ? err.message : String(err)}`);
             }
