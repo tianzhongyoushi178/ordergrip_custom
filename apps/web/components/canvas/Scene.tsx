@@ -42,6 +42,13 @@ export const Scene = () => {
             // On mobile, we might want to zoom out a bit more?
             camera={{ position: [40, 30, 60], fov: 35 }}
             className="absolute inset-0 z-0"
+            // Three.js 標準シェーダーが Windows ANGLE (D3D11) でコンパイルされる際の
+            // 浮動小数点精度警告 (X4122/X4008) を本番ビルドで抑制
+            onCreated={({ gl }) => {
+                if (typeof gl.debug === 'object' && gl.debug !== null) {
+                    gl.debug.checkShaderErrors = false;
+                }
+            }}
         >
             <Environment preset="city" />
             <ambientLight intensity={0.4} />
