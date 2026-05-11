@@ -10,16 +10,69 @@ import { NextRequest, NextResponse } from 'next/server';
  * リクエスト: multipart/form-data with 'file' field
  * レスポンス: { url: string, provider: string } または { error: string }
  *
- * プロバイダ優先順位:
- *   1. catbox.moe       - 永続保存、200MB まで、安定 (推奨)
- *   2. tmpfiles.org     - 60 分有効、フォールバック
+ * プロバイダ優先順位 (実測動作確認済み、複数フェイルオーバー):
+ *   1. litterbox.catbox.moe  - 72時間有効、catbox 系で Vercel IP も通る
+ *   2. uguu.se               - 48時間有効、安定動作
+ *   3. catbox.moe (permanent)- 永続保存。Vercel から 412 で弾かれることがあるが他がダメな時に試す
+ *   4. tmpfiles.org          - 60分有効、最終フォールバック
  */
-export const runtime = 'nodejs'; // Edge runtime ではない (FormData 制限回避)
+export const runtime = 'nodejs';
 
 interface UploadProvider {
     name: string;
     upload: (file: File) => Promise<string>;
 }
+
+const COMMON_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (compatible; ORDER-GRIP-DXF-Uploader/1.0)',
+};
+
+const uploadToLitterbox: UploadProvider = {
+    name: 'litterbox.catbox.moe',
+    upload: async (file: File): Promise<string> => {
+        const fd = new FormData();
+        fd.append('reqtype', 'fileupload');
+        fd.append('time', '72h'); // 1h, 12h, 24h, 72h
+        fd.append('fileToUpload', file, file.name);
+
+        const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+            method: 'POST',
+            body: fd,
+            headers: COMMON_HEADERS,
+        });
+        if (!res.ok) {
+            throw new Error(`litterbox: ${res.status} ${res.statusText}`);
+        }
+        const text = (await res.text()).trim();
+        if (!text.startsWith('https://')) {
+            throw new Error(`litterbox unexpected response: ${text.slice(0, 200)}`);
+        }
+        return text;
+    },
+};
+
+const uploadToUguu: UploadProvider = {
+    name: 'uguu.se',
+    upload: async (file: File): Promise<string> => {
+        const fd = new FormData();
+        fd.append('files[]', file, file.name);
+
+        const res = await fetch('https://uguu.se/upload', {
+            method: 'POST',
+            body: fd,
+            headers: COMMON_HEADERS,
+        });
+        if (!res.ok) {
+            throw new Error(`uguu.se: ${res.status} ${res.statusText}`);
+        }
+        const json = (await res.json()) as { success?: boolean; files?: Array<{ url?: string }> };
+        const url = json.files?.[0]?.url;
+        if (!url || typeof url !== 'string') {
+            throw new Error(`uguu.se unexpected response: ${JSON.stringify(json).slice(0, 200)}`);
+        }
+        return url;
+    },
+};
 
 const uploadToCatbox: UploadProvider = {
     name: 'catbox.moe',
@@ -31,9 +84,7 @@ const uploadToCatbox: UploadProvider = {
         const res = await fetch('https://catbox.moe/user/api.php', {
             method: 'POST',
             body: fd,
-            headers: {
-                'User-Agent': 'ORDER-GRIP-DXF-Uploader/1.0',
-            },
+            headers: COMMON_HEADERS,
         });
         if (!res.ok) {
             throw new Error(`catbox.moe: ${res.status} ${res.statusText}`);
@@ -55,9 +106,7 @@ const uploadToTmpfiles: UploadProvider = {
         const res = await fetch('https://tmpfiles.org/api/v1/upload', {
             method: 'POST',
             body: fd,
-            headers: {
-                'User-Agent': 'ORDER-GRIP-DXF-Uploader/1.0',
-            },
+            headers: COMMON_HEADERS,
         });
         if (!res.ok) {
             throw new Error(`tmpfiles.org: ${res.status} ${res.statusText}`);
@@ -68,12 +117,16 @@ const uploadToTmpfiles: UploadProvider = {
             throw new Error(`tmpfiles.org unexpected response: ${JSON.stringify(json).slice(0, 200)}`);
         }
         // tmpfiles.org は http:// で返すので https:// に補正
-        // また、/dl/ にすると直接ダウンロード URL になる
         return raw.replace(/^http:\/\//, 'https://').replace('/tmpfiles.org/', '/tmpfiles.org/dl/');
     },
 };
 
-const PROVIDERS = [uploadToCatbox, uploadToTmpfiles];
+const PROVIDERS: UploadProvider[] = [
+    uploadToLitterbox,
+    uploadToUguu,
+    uploadToCatbox,
+    uploadToTmpfiles,
+];
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
     try {
