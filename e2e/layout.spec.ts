@@ -248,7 +248,7 @@ test.describe('Editor (メイン画面) - 全画面対応', () => {
 });
 
 test.describe('LINE 連携ボタン', () => {
-  test('「DXFを公式LINEに送る」ボタンが表示される', async ({ page }) => {
+  test('「このバレルで相談する」ボタンが表示される', async ({ page }) => {
     await page.goto('/');
     const wizard = page.getByTestId('spec-wizard');
     await expect(wizard).toBeVisible({ timeout: 15_000 });
@@ -262,7 +262,7 @@ test.describe('LINE 連携ボタン', () => {
     const shareBtn = editor.getByTestId('share-dxf-line');
     await scrollIntoView(shareBtn);
     await expect(shareBtn).toBeVisible();
-    await expect(shareBtn).toContainText(/DXF.*LINE/);
+    await expect(shareBtn).toContainText('このバレルで相談する');
   });
 
   test('廃止したボタン (ブラウザに保存/読み込み/DXFダウンロード/友だち追加) は表示されない', async ({ page }) => {
