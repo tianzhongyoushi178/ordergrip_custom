@@ -202,7 +202,7 @@ export const Editor = () => {
             case 'ring_v':     return { cutWidth: 2.0, depth: 0.3, spacing: 0, count: 5 };
             case 'canyon':     return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'shark':      return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
-            case 'wing':       return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
+            case 'wing':       return { cutWidth: 1.0, depth: 0.4, spacing: 1.0, count: 5 };
             case 'step':       return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'stair':      return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'scallop':    return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };

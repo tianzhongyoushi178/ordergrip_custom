@@ -389,7 +389,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
             }
             case 'shark': {
                 // 常に full pitch をスパン (peak に land を作らず、ピン角を保持)
-                // cutWidth は無視される (shark の形状は pitch 全幅で決まる)
+                // 形状: valley → 線形ランプ → peak (ピン角) → 急降下 → 次の valley
                 const z1 = cycleStart;
                 const z2 = cycleStart + pitch;
                 return [
@@ -399,18 +399,20 @@ export const generateDxf = (input: DxfBarrelInput): string => {
                 ];
             }
             case 'wing': {
-                // 常に full pitch をスパン (peak にピン角を保持)
-                // wing 形状: valley から peak へ f^0.6 カーブで上昇、boundary で急降下
+                // shark 形状 + 溝間隔 (land)
+                // [cycleStart, cycleStart + cutWidth]: 線形ランプ (シャーク部分)
+                // [cycleStart + cutWidth, cycleEnd]: peak の land (溝間隔)
+                // 全て直線、ピン角あり
+                const aw = getActiveWidth(cut, pitch);
+                const z1 = cycleStart;
+                const z2 = cycleStart + aw;
                 const verts: Vertex[] = [
-                    { z: cycleStart, r: peakAt(cycleStart), bulge: 0 },
-                    { z: cycleStart, r: valleyAt(cycleStart), bulge: 0 },
+                    { z: z1, r: peakAt(z1), bulge: 0 },
+                    { z: z1, r: valleyAt(z1), bulge: 0 },
+                    { z: z2, r: peakAt(z2), bulge: 0 },
                 ];
-                const segments = 16;
-                for (let i = 1; i <= segments; i++) {
-                    const f = i / segments;
-                    const z = cycleStart + f * pitch;
-                    const rOff = depth * (1 - Math.pow(f, 0.6));
-                    verts.push({ z, r: peakAt(z) - rOff, bulge: 0 });
+                if (pitch - aw > EPSILON) {
+                    verts.push({ z: cycleEnd, r: peakAt(cycleEnd), bulge: 0 });
                 }
                 return verts;
             }

@@ -105,10 +105,11 @@ export const generateProfile = (
                 const rawFactor = cycle / pitch; // 0.0 -> 1.0
 
                 // For non-groove types, support active width (cutWidth < pitch = flat land after pattern)
-                // ただし shark/wing は peak のピン角を保つため、常に full pitch をスパンする
+                // shark は peak のピン角を保つため常に full pitch をスパンする
+                // wing は shark + 溝間隔 (land) として activeWidth を使用する
                 const isGrooveType = cut.type === 'ring' || cut.type === 'micro'
                     || cut.type === 'ring_double' || cut.type === 'ring_triple';
-                const isFullPitchType = cut.type === 'shark' || cut.type === 'wing';
+                const isFullPitchType = cut.type === 'shark';
                 let factor = rawFactor;
                 if (!isGrooveType && !isFullPitchType) {
                     const activeWidth = cut.properties.cutWidth;
@@ -165,11 +166,12 @@ export const generateProfile = (
                         break;
 
                     case 'wing':
-                        // 曲線テーパー（シャークより緩やかなカーブ）
-                        //      ╱|  ← steep drop at pitch boundary
-                        //    ╱  |
-                        //  ╱   |
-                        r -= depth * (1 - Math.pow(factor, 0.6));
+                        // Wing = Shark + 溝間隔 (land between teeth)
+                        // 全て直線。 active 区間内では shark と同じ線形ランプ。
+                        // active 外 (cutWidth < pitch) は上の活性幅ロジックで continue 済 (land at peak)。
+                        //  /|     /|     /|
+                        // / | _  / | _  / | _   ← shark teeth with peak-land (溝間隔) between
+                        r -= depth * (1 - factor);
                         break;
 
                     case 'ring_v':
