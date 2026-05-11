@@ -582,32 +582,57 @@ export const exportToDxf = (input: DxfBarrelInput, filename?: string): void => {
 
 /**
  * 共有結果のステータス。
- * - 'auto-line': oaMessage deep link で公式 LINE のチャットを直接開いた (1 タップ送信)
- * - 'web-share': Web Share API で OS のシェアシートを開いた (URL がプリフィルされる)
- * - 'clipboard': URL をクリップボードにコピー + 友だち追加ページを開いた
- * - 'failed':    アップロード自体に失敗した (通信エラー等)
+ * - 'file-share': Web Share API でファイルそのものを共有 (LINE に添付ファイルとして渡せる)
+ * - 'auto-line':  oaMessage deep link で公式 LINE のチャットに URL プリフィル
+ * - 'url-share':  Web Share API で URL を共有 (テキスト経由)
+ * - 'clipboard':  URL をクリップボードにコピー + 友だち追加ページを開いた
+ * - 'failed':     アップロード自体に失敗した (通信エラー等)
  */
 export type ShareResult =
+    | { status: 'file-share' }
     | { status: 'auto-line'; url: string }
-    | { status: 'web-share'; url: string }
+    | { status: 'url-share'; url: string }
     | { status: 'clipboard'; url: string }
     | { status: 'failed'; error: string };
 
 /**
- * DXF を 0x0.st にアップロードして、公式 LINE 宛にダウンロード URL を送信する。
+ * DXF を公式 LINE 宛に送る。優先順位:
  *
- * 1. DXF を生成
- * 2. 0x0.st にアップロード (公開 URL 取得)
- * 3. 環境変数 NEXT_PUBLIC_LINE_OA_BASIC_ID が設定されていれば、
- *    oaMessage deep link で公式 LINE のチャットを URL プリフィルで自動オープン (1 タップ送信)
- * 4. Basic ID 未設定でも Web Share API があれば URL を共有 (シェアシート経由)
- * 5. 上記いずれもダメなら URL をクリップボードにコピーして友だち追加ページを開く
+ * 1. Web Share API (ファイル添付) — モバイル Safari / Chrome 等は files をサポート。
+ *    OS のシェアシートが開き、ユーザーは LINE → 公式アカウント → 送信。ファイルがそのまま添付される。
+ * 2. catbox.moe へアップロード → URL を送る経路:
+ *    a. NEXT_PUBLIC_LINE_OA_BASIC_ID 設定済 → oaMessage deep link で 1 タップ送信
+ *    b. Web Share API (テキスト/URL) → シェアシート
+ *    c. クリップボードにコピー + 友だち追加ページ
  */
 export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promise<ShareResult> => {
     const dxf = generateDxf(input);
     const name = filename ?? buildFilename();
+    const file = new File([dxf], name, { type: 'application/dxf' });
 
-    // 1. アップロード
+    const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+
+    // 1. Web Share (ファイル添付) を最優先 — LINE に直接ファイルが添付できる
+    if (typeof nav.share === 'function' && typeof nav.canShare === 'function') {
+        try {
+            if (nav.canShare({ files: [file] })) {
+                await nav.share({
+                    files: [file],
+                    title: 'ORDER GRIP バレル設計DXF',
+                    text: 'ORDER GRIP で作成したバレル設計データ (DXF) です。',
+                });
+                return { status: 'file-share' };
+            }
+        } catch (err) {
+            if ((err as Error).name === 'AbortError') {
+                // ユーザーがキャンセル — 成功とみなす (リトライ防止)
+                return { status: 'file-share' };
+            }
+            // ファイル共有が失敗 → URL アップロード経路にフォールバック
+        }
+    }
+
+    // 2. ファイル共有不可 → アップロード → URL 経路
     let url: string;
     try {
         url = await uploadDxfTemp(dxf, name);
@@ -615,17 +640,16 @@ export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promis
         return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
     }
 
-    const message = `ORDER GRIP バレル設計データ\n${url}\n（30日間有効）`;
+    const message = `ORDER GRIP バレル設計データ\n${url}`;
 
-    // 2. Basic ID あり → oaMessage deep link で 1 タップ送信
+    // 2a. Basic ID 設定済 → oaMessage deep link
     if (LINE_OA_BASIC_ID) {
         const link = buildLineDeepLink(message);
         window.open(link, '_blank', 'noopener,noreferrer');
         return { status: 'auto-line', url };
     }
 
-    // 3. Web Share API で URL を共有
-    const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+    // 2b. URL を Web Share
     if (typeof nav.share === 'function') {
         try {
             await nav.share({
@@ -633,17 +657,15 @@ export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promis
                 text: message,
                 url,
             });
-            return { status: 'web-share', url };
+            return { status: 'url-share', url };
         } catch (err) {
-            if ((err as Error).name !== 'AbortError') {
-                // Share がキャンセル以外の理由で失敗 → クリップボードフォールバック
-            } else {
-                return { status: 'web-share', url };
+            if ((err as Error).name === 'AbortError') {
+                return { status: 'url-share', url };
             }
         }
     }
 
-    // 4. クリップボードにコピー + 友だち追加ページ
+    // 2c. クリップボードにコピー + 友だち追加ページ
     try {
         await navigator.clipboard.writeText(message);
     } catch {
