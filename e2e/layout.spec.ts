@@ -238,17 +238,17 @@ test.describe('Editor (メイン画面) - 全画面対応', () => {
     await scrollIntoView(weight);
     await expect(weight).toBeVisible();
 
-    // 「ブラウザに保存」ボタンまでスクロールして到達できる
-    const saveBtn = editor.getByRole('button', { name: 'ブラウザに保存' });
-    await scrollIntoView(saveBtn);
-    await expect(saveBtn).toBeVisible();
-    const overflow = await elementWithinViewport(page, saveBtn);
-    expect(overflow.overflowsBottom, '保存ボタンがビューポート下にはみ出している').toBeFalsy();
+    // 「DXFを公式LINEに送る」ボタンまでスクロールして到達できる
+    const shareBtn = editor.getByTestId('share-dxf-line');
+    await scrollIntoView(shareBtn);
+    await expect(shareBtn).toBeVisible();
+    const overflow = await elementWithinViewport(page, shareBtn);
+    expect(overflow.overflowsBottom, 'LINEボタンがビューポート下にはみ出している').toBeFalsy();
   });
 });
 
 test.describe('LINE 連携ボタン', () => {
-  test('「DXFを公式LINEに送る」ボタンと「友だち追加」リンクが表示される', async ({ page }) => {
+  test('「DXFを公式LINEに送る」ボタンが表示される', async ({ page }) => {
     await page.goto('/');
     const wizard = page.getByTestId('spec-wizard');
     await expect(wizard).toBeVisible({ timeout: 15_000 });
@@ -263,11 +263,23 @@ test.describe('LINE 連携ボタン', () => {
     await scrollIntoView(shareBtn);
     await expect(shareBtn).toBeVisible();
     await expect(shareBtn).toContainText(/DXF.*LINE/);
+  });
 
-    const friendLink = editor.getByTestId('line-add-friend');
-    await scrollIntoView(friendLink);
-    await expect(friendLink).toBeVisible();
-    await expect(friendLink).toHaveAttribute('href', /lin\.ee/);
+  test('廃止したボタン (ブラウザに保存/読み込み/DXFダウンロード/友だち追加) は表示されない', async ({ page }) => {
+    await page.goto('/');
+    const wizard = page.getByTestId('spec-wizard');
+    await expect(wizard).toBeVisible({ timeout: 15_000 });
+    await clickButtonAndExpect(
+      page,
+      wizard.getByRole('button', { name: '閉じる' }),
+      () => expect(wizard).toHaveCount(0, { timeout: 2_000 }),
+    );
+
+    const editor = page.getByTestId('editor-panel');
+    await expect(editor.getByRole('button', { name: 'ブラウザに保存' })).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: '読み込み' })).toHaveCount(0);
+    await expect(editor.getByTestId('export-dxf')).toHaveCount(0);
+    await expect(editor.getByTestId('line-add-friend')).toHaveCount(0);
   });
 });
 

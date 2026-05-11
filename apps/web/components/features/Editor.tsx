@@ -4,7 +4,6 @@ import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { saveToLocalStorage, loadFromLocalStorage } from '@/lib/storage/local';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
@@ -891,19 +890,6 @@ export const Editor = () => {
 
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                     <button
-                        onClick={() => {
-                            saveToLocalStorage({
-                                shapeType,
-                                length, maxDiameter, materialDensity, cuts,
-                                frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline
-                            });
-                            alert('ブラウザに保存しました！');
-                        }}
-                        className="w-full py-3 bg-black dark:bg-white text-white dark:text-black font-bold rounded-lg hover:opacity-90 transition-opacity"
-                    >
-                        ブラウザに保存
-                    </button>
-                    <button
                         onClick={async () => {
                             const dxfInput = {
                                 length, maxDiameter, cuts,
@@ -943,44 +929,6 @@ export const Editor = () => {
                         </svg>
                         DXFを公式LINEに送る
                     </button>
-                    <a
-                        href={OFFICIAL_LINE_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block w-full text-center text-xs text-zinc-500 hover:text-green-600 dark:hover:text-green-400 underline transition-colors"
-                        data-testid="line-add-friend"
-                    >
-                        ORDER GRIP 公式LINEを友だち追加
-                    </a>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => {
-                                const data = loadFromLocalStorage();
-                                if (data) {
-                                    setAll(data);
-                                    alert('読み込みました！');
-                                } else {
-                                    alert('保存されたデータが見つかりません。');
-                                }
-                            }}
-                            className="flex-1 py-2 bg-zinc-200 dark:bg-zinc-800 text-xs font-bold rounded hover:opacity-80"
-                        >
-                            読み込み
-                        </button>
-                        <button
-                            onClick={() => exportToDxf({
-                                length, maxDiameter, cuts,
-                                frontTaperLength, rearTaperLength,
-                                holeDepthFront, holeDepthRear,
-                                outline, frontEndShape, rearEndShape,
-                                materialDensity,
-                            })}
-                            className="flex-1 py-2 bg-zinc-200 dark:bg-zinc-800 text-xs font-bold rounded hover:opacity-80"
-                            data-testid="export-dxf"
-                        >
-                            DXFダウンロード
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
