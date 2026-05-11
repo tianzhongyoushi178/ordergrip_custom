@@ -105,10 +105,12 @@ export const generateProfile = (
                 const rawFactor = cycle / pitch; // 0.0 -> 1.0
 
                 // For non-groove types, support active width (cutWidth < pitch = flat land after pattern)
+                // ただし shark/wing は peak のピン角を保つため、常に full pitch をスパンする
                 const isGrooveType = cut.type === 'ring' || cut.type === 'micro'
                     || cut.type === 'ring_double' || cut.type === 'ring_triple';
+                const isFullPitchType = cut.type === 'shark' || cut.type === 'wing';
                 let factor = rawFactor;
-                if (!isGrooveType) {
+                if (!isGrooveType && !isFullPitchType) {
                     const activeWidth = cut.properties.cutWidth;
                     if (activeWidth !== undefined && activeWidth < pitch) {
                         const activeFraction = activeWidth / pitch;
