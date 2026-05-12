@@ -1,9 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CutType } from '@/lib/store/useBarrelStore';
 
-interface CutSelectorProps {
-    onSelect: (type: CutType) => void;
+/** カット追加前に編集可能なパラメータ。指定しなかった項目は Editor 側でデフォルト適用 */
+export interface CutParams {
+    cutWidth?: number;
+    depth?: number;
+    spacing?: number;
+    count?: number;
+    gapWidth?: number;
+    itemCount?: number;
 }
+
+interface CutSelectorProps {
+    onSelect: (type: CutType, params?: CutParams) => void;
+}
+
+/** 各カット種別の初期値。Editor.tsx の defaultProps と合わせる */
+const PARAM_DEFAULTS: Record<CutType, CutParams> = {
+    ring:        { cutWidth: 1.0, depth: 0.3, spacing: 1.0, count: 5 },
+    ring_double: { cutWidth: 0.5, depth: 0.3, spacing: 0.6, count: 5, gapWidth: 0.4 },
+    ring_triple: { cutWidth: 0.4, depth: 0.3, spacing: 0.4, count: 5, gapWidth: 0.2 },
+    ring_r:      { cutWidth: 2.0, depth: 0.3, spacing: 0,   count: 5 },
+    ring_v:      { cutWidth: 2.0, depth: 0.3, spacing: 0,   count: 5 },
+    canyon:      { cutWidth: 2.0, depth: 0.4, spacing: 0,   count: 5 },
+    shark:       { cutWidth: 2.0, depth: 0.4, spacing: 0,   count: 5 },
+    wing:        { cutWidth: 1.0, depth: 0.4, spacing: 1.0, count: 5 },
+    step:        { cutWidth: 2.0, depth: 0.4, spacing: 0,   count: 5 },
+    stair:       { cutWidth: 2.0, depth: 0.4, spacing: 0,   count: 5 },
+    scallop:     { cutWidth: 2.0, depth: 0.4, spacing: 0,   count: 5 },
+    micro:       { cutWidth: 0.5, depth: 0.15, spacing: 0.5, count: 10 },
+    vertical:    { depth: 0.5, count: 1, itemCount: 12 },
+    none:        {},
+};
 
 type Rating = '強' | 'やや強' | '中(万能)' | 'やや弱' | '弱';
 type SymbolRating = '◎' | '○' | '△';
@@ -220,9 +248,92 @@ const CutIcon = ({ cut, className }: { cut: CutMeta; className?: string }) => (
     </svg>
 );
 
+/** コンパクトな数値入力 (パラメータ編集用) */
+const ParamInput = ({ label, suffix, value, onChange, step = 0.1, min = 0, integer = false }: {
+    label: string;
+    suffix?: string;
+    value: number;
+    onChange: (v: number) => void;
+    step?: number;
+    min?: number;
+    integer?: boolean;
+}) => {
+    const [local, setLocal] = useState<string | null>(null);
+    const display = local ?? (Number.isInteger(value) ? String(value) : parseFloat(value.toFixed(2)).toString());
+    const commit = () => {
+        if (local === null) return;
+        const parsed = parseFloat(local);
+        if (!isNaN(parsed)) {
+            let v = integer ? Math.round(parsed) : parsed;
+            if (v < min) v = min;
+            onChange(v);
+        }
+        setLocal(null);
+    };
+    return (
+        <label className="flex flex-col gap-0.5">
+            <span className="text-[9px] text-zinc-500 dark:text-zinc-400 font-medium">{label}{suffix && <span className="text-zinc-400 ml-0.5">{suffix}</span>}</span>
+            <div className="flex items-stretch border border-zinc-200 dark:border-zinc-700 rounded overflow-hidden bg-white dark:bg-zinc-900">
+                <button
+                    type="button"
+                    onClick={() => {
+                        const cur = local !== null && !isNaN(parseFloat(local)) ? parseFloat(local) : value;
+                        let next = cur - step;
+                        if (integer) next = Math.round(next);
+                        if (next < min) next = min;
+                        onChange(next);
+                        setLocal(null);
+                    }}
+                    className="px-1.5 shrink-0 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-sm leading-none"
+                    tabIndex={-1}
+                    aria-label="減らす"
+                >−</button>
+                <input
+                    type="text"
+                    inputMode="decimal"
+                    value={display}
+                    onFocus={() => setLocal(display)}
+                    onChange={(e) => setLocal(e.target.value)}
+                    onBlur={commit}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur(); } }}
+                    className="flex-1 min-w-0 w-full px-1 py-0.5 text-right text-[11px] font-bold bg-transparent outline-none"
+                />
+                <button
+                    type="button"
+                    onClick={() => {
+                        const cur = local !== null && !isNaN(parseFloat(local)) ? parseFloat(local) : value;
+                        let next = cur + step;
+                        if (integer) next = Math.round(next);
+                        onChange(next);
+                        setLocal(null);
+                    }}
+                    className="px-1.5 shrink-0 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-sm leading-none"
+                    tabIndex={-1}
+                    aria-label="増やす"
+                >+</button>
+            </div>
+        </label>
+    );
+};
+
 export const CutSelector = ({ onSelect }: CutSelectorProps) => {
     const [selectedId, setSelectedId] = useState<CutType | null>(null);
+    const [params, setParams] = useState<CutParams>({});
     const selectedCut = CUT_DATA.find(c => c.id === selectedId) ?? null;
+
+    // カット種別変更時に該当デフォルトでパラメータをリセット
+    useEffect(() => {
+        if (selectedId) {
+            setParams({ ...PARAM_DEFAULTS[selectedId] });
+        } else {
+            setParams({});
+        }
+    }, [selectedId]);
+
+    const showGapWidth = selectedId === 'ring_double' || selectedId === 'ring_triple';
+    const showItemCount = selectedId === 'vertical';
+    const showSpacing = selectedId !== 'vertical';
+    const showCutWidth = selectedId !== 'vertical';
 
     return (
         <div className="bg-zinc-100 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700">
@@ -253,7 +364,7 @@ export const CutSelector = ({ onSelect }: CutSelectorProps) => {
                 </div>
             </div>
 
-            {/* 詳細パネル（選択時のみ表示。カット追加前にスペックを確認できる） */}
+            {/* 詳細パネル（選択時のみ表示。カット追加前にスペックを確認・パラメータを編集できる） */}
             {selectedCut && (
                 <div className="border-t border-zinc-200 dark:border-zinc-700 p-3 animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="flex items-start justify-between mb-2">
@@ -262,7 +373,7 @@ export const CutSelector = ({ onSelect }: CutSelectorProps) => {
                         </h3>
                         <button
                             onClick={() => {
-                                onSelect(selectedCut.id);
+                                onSelect(selectedCut.id, params);
                                 setSelectedId(null);
                             }}
                             className="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-md hover:bg-indigo-700 transition-colors shrink-0 ml-2"
@@ -291,6 +402,58 @@ export const CutSelector = ({ onSelect }: CutSelectorProps) => {
                                 {selectedCut.maintenance}
                             </div>
                         </div>
+                    </div>
+
+                    {/* パラメータ編集 (追加前に変更可能) */}
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                        {showCutWidth && (
+                            <ParamInput
+                                label="溝幅"
+                                suffix="mm"
+                                value={params.cutWidth ?? 0}
+                                onChange={(v) => setParams((p) => ({ ...p, cutWidth: v }))}
+                                step={0.1}
+                                min={0.1}
+                            />
+                        )}
+                        <ParamInput
+                            label="溝深さ"
+                            suffix="mm"
+                            value={params.depth ?? 0}
+                            onChange={(v) => setParams((p) => ({ ...p, depth: v }))}
+                            step={0.05}
+                            min={0.05}
+                        />
+                        {showSpacing && (
+                            <ParamInput
+                                label="溝間隔"
+                                suffix="mm"
+                                value={params.spacing ?? 0}
+                                onChange={(v) => setParams((p) => ({ ...p, spacing: v }))}
+                                step={0.1}
+                                min={0}
+                            />
+                        )}
+                        <ParamInput
+                            label={showItemCount ? '本数' : 'カット数'}
+                            value={(showItemCount ? params.itemCount : params.count) ?? 1}
+                            onChange={(v) => setParams((p) => showItemCount
+                                ? { ...p, itemCount: Math.round(v) }
+                                : { ...p, count: Math.round(v) })}
+                            step={1}
+                            min={1}
+                            integer
+                        />
+                        {showGapWidth && (
+                            <ParamInput
+                                label="サブ溝間隔"
+                                suffix="mm"
+                                value={params.gapWidth ?? 0}
+                                onChange={(v) => setParams((p) => ({ ...p, gapWidth: v }))}
+                                step={0.05}
+                                min={0}
+                            />
+                        )}
                     </div>
 
                     {/* 説明文 */}

@@ -7,7 +7,7 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
-import { CutSelector } from './CutSelector';
+import { CutSelector, type CutParams } from './CutSelector';
 
 /** 数値入力: フォーカス中はローカルstate、blur/Enterで確定 */
 const NumInput = ({ value, onChange, className, ...rest }: {
@@ -211,15 +211,22 @@ export const Editor = () => {
         }
     };
 
-    const addBasicCut = (type: CutType) => {
+    const addBasicCut = (type: CutType, userParams?: CutParams) => {
         const d = defaultProps(type);
+        // ユーザー指定パラメータでデフォルトを上書き
+        const cutWidth = userParams?.cutWidth ?? d.cutWidth;
+        const depth = userParams?.depth ?? d.depth;
+        const spacing = userParams?.spacing ?? d.spacing;
+        const count = userParams?.count ?? d.count;
+        const gapWidth = userParams?.gapWidth ?? d.gapWidth;
+        const itemCount = userParams?.itemCount ?? d.itemCount;
 
         // Compute active width for double/triple
-        let activeWidth = d.cutWidth;
-        if (type === 'ring_double') activeWidth = 2 * d.cutWidth + (d.gapWidth ?? 0);
-        else if (type === 'ring_triple') activeWidth = 3 * d.cutWidth + 2 * (d.gapWidth ?? 0);
+        let activeWidth = cutWidth;
+        if (type === 'ring_double') activeWidth = 2 * cutWidth + (gapWidth ?? 0);
+        else if (type === 'ring_triple') activeWidth = 3 * cutWidth + 2 * (gapWidth ?? 0);
 
-        const { pitch, endZ: zoneLen } = recalc(0, activeWidth, d.spacing, d.count);
+        const { pitch, endZ: zoneLen } = recalc(0, activeWidth, spacing, count);
         const center = length / 2;
         let start = Math.max(0, center - zoneLen / 2);
         let end = start + zoneLen;
@@ -263,10 +270,10 @@ export const Editor = () => {
             endZ: end,
             properties: {
                 pitch,
-                depth: d.depth,
-                cutWidth: d.cutWidth,
-                ...(d.gapWidth !== undefined && { gapWidth: d.gapWidth }),
-                ...(d.itemCount !== undefined && { itemCount: d.itemCount }),
+                depth,
+                cutWidth,
+                ...(gapWidth !== undefined && { gapWidth }),
+                ...(itemCount !== undefined && { itemCount }),
             }
         });
     };
@@ -600,7 +607,7 @@ export const Editor = () => {
                     </div>
 
                     <div className="mb-6">
-                        <CutSelector onSelect={(type) => addBasicCut(type)} />
+                        <CutSelector onSelect={(type, params) => addBasicCut(type, params)} />
                     </div>
                     <div className="space-y-3 pb-8">
                         {cuts.length === 0 && (
