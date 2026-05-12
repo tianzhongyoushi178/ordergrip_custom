@@ -226,21 +226,34 @@ export const Editor = () => {
 
         // Find free spot if colliding
         if (checkCollision(null, start, end, type)) {
-            let found = false;
-            let testStart = 0;
-            while (testStart + zoneLen <= length) {
-                if (!checkCollision(null, testStart, testStart + zoneLen, type)) {
-                    start = testStart;
-                    end = testStart + zoneLen;
-                    found = true;
+            // ギャップ探索: 既存の非縦カット領域をソートし、隙間に zoneLen が収まる最初の位置を見つける
+            // 整数刻み探索だと端数の境界を見逃すため、隙間を直接見つける方式に変更
+            const GAP_EPSILON = 1e-6;
+            const occupied = cuts
+                .filter((c) => c.type !== 'vertical')
+                .map((c) => ({ start: c.startZ, end: c.endZ }))
+                .sort((a, b) => a.start - b.start);
+
+            let foundStart: number | null = null;
+            let cursor = 0;
+            for (const seg of occupied) {
+                if (seg.start - cursor >= zoneLen - GAP_EPSILON) {
+                    foundStart = cursor;
                     break;
                 }
-                testStart += 1;
+                cursor = Math.max(cursor, seg.end);
             }
-            if (!found) {
-                alert("空きスペースが見つかりませんでした。既存のカットを調整してください。");
+            // 末尾ギャップ
+            if (foundStart === null && length - cursor >= zoneLen - GAP_EPSILON) {
+                foundStart = cursor;
+            }
+
+            if (foundStart === null) {
+                alert('空きスペースが見つかりませんでした。既存のカットを調整してください。');
                 return;
             }
+            start = foundStart;
+            end = foundStart + zoneLen;
         }
 
         addCut({
