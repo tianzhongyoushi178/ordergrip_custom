@@ -310,15 +310,38 @@ export const generateBarrelGeometry = (
     points.push(new THREE.Vector2(0.001, length - holeDepthRear));
 
     // 3. Build Mesh Data
-    const radialSegments = 64;
+    // Pre-filter vertical cuts
+    const verticalCuts = cuts.filter(c => c.type === 'vertical');
+
+    // Adaptive radial resolution: a fixed 64 under-samples narrow vertical
+    // grooves. With count=8 / grooveFraction=0.1 only the boundary vertex hits
+    // the groove and edgeFade zeros its depth, making the cut vanish. Counts
+    // that don't divide segments evenly also alias. Scale segments so each
+    // groove gets MIN_VERTS_PER_GROOVE samples and align with the densest count.
+    let radialSegments = 64;
+    if (verticalCuts.length > 0) {
+        const MIN_VERTS_PER_GROOVE = 6;
+        const MIN_GROOVE_FRACTION = 0.05;
+        let required = radialSegments;
+        let maxCount = 0;
+        for (const vCut of verticalCuts) {
+            const count = vCut.properties.itemCount || 12;
+            const grooveFraction = Math.max(
+                MIN_GROOVE_FRACTION,
+                vCut.properties.grooveFraction ?? 0.5
+            );
+            const needed = Math.ceil((count * MIN_VERTS_PER_GROOVE) / grooveFraction);
+            if (needed > required) required = needed;
+            if (count > maxCount) maxCount = count;
+        }
+        if (maxCount > 0) required = Math.ceil(required / maxCount) * maxCount;
+        radialSegments = Math.min(required, 1024);
+    }
     const heightSegments = points.length - 1;
 
     const vertices: number[] = [];
     const indices: number[] = [];
     const uvs: number[] = [];
-
-    // Pre-filter vertical cuts
-    const verticalCuts = cuts.filter(c => c.type === 'vertical');
 
     // Generate Vertices
     for (let i = 0; i < points.length; i++) {
