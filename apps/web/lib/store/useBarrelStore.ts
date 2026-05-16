@@ -7,7 +7,8 @@ export type CutType =
   | 'scallop' | 'shark' | 'wing'
   | 'micro' | 'vertical' | 'none';
 
-export type EndShape = 'taper' | 'round';
+// taper: 直線テーパー / round: 凹R（先細りで根元が急に膨らむ） / convex: 凸R（先端からなめらかに膨らむ）
+export type EndShape = 'taper' | 'round' | 'convex';
 
 export interface CutZone {
   id: string;
@@ -38,7 +39,7 @@ export interface BarrelState {
   rearTaperLength: number;  // mm
   shapeType: 'torpedo' | 'straight' | 'custom';
 
-  // 前後端の形状: 'taper' (直線テーパー) or 'round' (R/円弧)
+  // 前後端の形状: 'taper' (直線テーパー) / 'round' (凹R/円弧) / 'convex' (凸R/反転円弧)
   frontEndShape: EndShape;
   rearEndShape: EndShape;
 

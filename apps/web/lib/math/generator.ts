@@ -15,9 +15,15 @@ const endRadius = (
     if (taperLen <= 0) return baseR;
     const t = Math.min(1, Math.max(0, distFromEnd / taperLen));
     if (shape === 'round') {
-        // 楕円弧 (z軸=taperLen, r軸=baseR-endR の楕円). 凸形状でR(丸み)を描く。
+        // 凹R: 楕円弧で先端付近は細いまま、根元で急に膨らむ。
         // r = baseR - (baseR-endR) * sqrt(1 - t^2)
         return baseR - (baseR - endR) * Math.sqrt(Math.max(0, 1 - t * t));
+    }
+    if (shape === 'convex') {
+        // 凸R: 凹Rを反転した楕円弧。先端からすぐ膨らみ、根元で平坦に。
+        // r = endR + (baseR-endR) * sqrt(1 - (1-t)^2)
+        const u = 1 - t;
+        return endR + (baseR - endR) * Math.sqrt(Math.max(0, 1 - u * u));
     }
     // 直線テーパー
     return endR + (baseR - endR) * t;

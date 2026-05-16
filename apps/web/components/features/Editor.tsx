@@ -446,7 +446,7 @@ export const Editor = () => {
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="text-sm font-medium">前端 (チップ側) 形状</label>
                                     <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded p-0.5">
-                                        {(['taper', 'round'] as const).map((s) => (
+                                        {(['taper', 'round', 'convex'] as const).map((s) => (
                                             <button
                                                 key={s}
                                                 type="button"
@@ -457,13 +457,13 @@ export const Editor = () => {
                                                         : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                {s === 'taper' ? 'テーパー' : 'R'}
+                                                {s === 'taper' ? 'テーパー' : s === 'round' ? '凹R' : '凸R'}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                                 <div className="flex justify-between mb-2">
-                                    <label className="text-xs text-zinc-500">{frontEndShape === 'round' ? 'R長さ' : 'フロントテーパー終了位置'}</label>
+                                    <label className="text-xs text-zinc-500">{frontEndShape !== 'taper' ? 'R長さ' : 'フロントテーパー終了位置'}</label>
                                     <div className="flex items-center gap-1">
                                         <NumStepper
                                             value={frontTaperLength}
@@ -487,7 +487,7 @@ export const Editor = () => {
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="text-sm font-medium">後端 (シャフト側) 形状</label>
                                     <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded p-0.5">
-                                        {(['taper', 'round'] as const).map((s) => (
+                                        {(['taper', 'round', 'convex'] as const).map((s) => (
                                             <button
                                                 key={s}
                                                 type="button"
@@ -498,17 +498,17 @@ export const Editor = () => {
                                                         : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                {s === 'taper' ? 'テーパー' : 'R'}
+                                                {s === 'taper' ? 'テーパー' : s === 'round' ? '凹R' : '凸R'}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                                 <div className="flex justify-between mb-2">
-                                    <label className="text-xs text-zinc-500">{rearEndShape === 'round' ? 'R長さ' : 'リアテーパー開始位置'}</label>
+                                    <label className="text-xs text-zinc-500">{rearEndShape !== 'taper' ? 'R長さ' : 'リアテーパー開始位置'}</label>
                                     <div className="flex items-center gap-1">
                                         <NumStepper
-                                            value={parseFloat((rearEndShape === 'round' ? rearTaperLength : (length - rearTaperLength)).toFixed(1))}
-                                            onChange={(v) => updateDimension('rearTaperLength', rearEndShape === 'round' ? v : length - v)}
+                                            value={parseFloat((rearEndShape !== 'taper' ? rearTaperLength : (length - rearTaperLength)).toFixed(1))}
+                                            onChange={(v) => updateDimension('rearTaperLength', rearEndShape !== 'taper' ? v : length - v)}
                                             step={0.5} min={0} max={length}
                                             className="w-28"
                                             bg="bg-transparent"
@@ -518,10 +518,10 @@ export const Editor = () => {
                                 </div>
                                 <input
                                     type="range" min="0" max={length} step="0.5"
-                                    value={rearEndShape === 'round' ? rearTaperLength : (length - rearTaperLength)}
+                                    value={rearEndShape !== 'taper' ? rearTaperLength : (length - rearTaperLength)}
                                     onChange={(e) => {
                                         const val = parseFloat(e.target.value);
-                                        updateDimension('rearTaperLength', rearEndShape === 'round' ? val : length - val);
+                                        updateDimension('rearTaperLength', rearEndShape !== 'taper' ? val : length - val);
                                     }}
                                     className="w-full accent-blue-600"
                                 />

@@ -53,10 +53,10 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
     if (typeof raw.shapeType === 'string' && ['torpedo', 'straight', 'custom'].includes(raw.shapeType)) {
         result.shapeType = raw.shapeType as BarrelState['shapeType'];
     }
-    if (typeof raw.frontEndShape === 'string' && ['taper', 'round'].includes(raw.frontEndShape)) {
+    if (typeof raw.frontEndShape === 'string' && ['taper', 'round', 'convex'].includes(raw.frontEndShape)) {
         result.frontEndShape = raw.frontEndShape as BarrelState['frontEndShape'];
     }
-    if (typeof raw.rearEndShape === 'string' && ['taper', 'round'].includes(raw.rearEndShape)) {
+    if (typeof raw.rearEndShape === 'string' && ['taper', 'round', 'convex'].includes(raw.rearEndShape)) {
         result.rearEndShape = raw.rearEndShape as BarrelState['rearEndShape'];
     }
 
