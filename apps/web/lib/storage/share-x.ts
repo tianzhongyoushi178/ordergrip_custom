@@ -37,6 +37,29 @@ export type ShareToXResult =
     | { status: 'opened' }
     | { status: 'failed'; error: string };
 
+type Platform = 'ios' | 'android' | 'desktop';
+
+const detectPlatform = (): Platform => {
+    if (typeof navigator === 'undefined') return 'desktop';
+    const ua = navigator.userAgent;
+    // iPadOS 13+ は MacIntel + touch を返すので両方検出
+    const isIOS = /iPhone|iPad|iPod/.test(ua) ||
+        (ua.includes('Mac') && typeof document !== 'undefined' && 'ontouchend' in document);
+    if (isIOS) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    return 'desktop';
+};
+
+/** iOS の X アプリ用カスタムスキーム (X 公式アプリは旧 twitter:// を維持) */
+const buildIOSAppUrl = (text: string): string =>
+    `twitter://post?message=${encodeURIComponent(text)}`;
+
+/** Android Chrome 用 intent URI。X アプリ未インストールなら browser_fallback_url が開く */
+const buildAndroidIntentUri = (text: string, webFallbackUrl: string): string =>
+    `intent://post?text=${encodeURIComponent(text)}` +
+    `#Intent;scheme=twitter;package=com.twitter.android;` +
+    `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
+
 export const shareBarrelToX = (): ShareToXResult => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
@@ -64,9 +87,23 @@ export const shareBarrelToX = (): ShareToXResult => {
     link.click();
     link.remove();
 
-    // 2) 同じユーザージェスチャー内で X 投稿画面を新タブで開く
-    //    (Safari のポップアップブロック回避のため await を挟まない)
-    window.open(buildXIntentUrl(X_POST_TEXT, shareUrl), '_blank', 'noopener,noreferrer');
+    // 2) プラットフォーム別に X アプリへの遷移を試行
+    const platform = detectPlatform();
+    const webUrl = buildXIntentUrl(X_POST_TEXT, shareUrl);
+
+    if (platform === 'ios') {
+        // iOS: カスタムスキームを location.href にセットして X アプリを起動
+        // Universal Links (x.com/...) はブラウザ内 navigation では発火しないため、
+        // 確実にアプリを開くには twitter:// スキームを使う必要がある。
+        window.location.href = buildIOSAppUrl(X_POST_TEXT);
+    } else if (platform === 'android') {
+        // Android Chrome: intent URI。X アプリがインストールされていればアプリ起動、
+        // 未インストールなら browser_fallback_url (Web 投稿画面) にフォールバック。
+        window.location.href = buildAndroidIntentUri(X_POST_TEXT, webUrl);
+    } else {
+        // Desktop: アプリが存在しないので Web 投稿画面を新タブで開く
+        window.open(webUrl, '_blank', 'noopener,noreferrer');
+    }
 
     return { status: 'opened' };
 };
