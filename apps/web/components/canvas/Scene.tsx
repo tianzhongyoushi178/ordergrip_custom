@@ -18,18 +18,19 @@ export const Scene = () => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // Reset Camera Effect
+    // Reset Camera Effect — only fire when the user explicitly presses the
+    // "視点をリセット" button (triggerCameraReset increments cameraResetTrigger).
+    // 初回マウントは Canvas の camera prop が初期位置を設定するため不要。
+    // isMobile を依存に入れるとブレークポイント跨ぎで意図せずカメラがリセット
+    // されるため除外する。
     useEffect(() => {
+        if (cameraResetTrigger === 0) return;
         if (controlsRef.current) {
-            controlsRef.current.reset();
-            // Force update target if needed, though reset should handle it if we set defaults correctly? 
-            // Actually reset() reverts to properties at mount or last save. 
-            // Better to manually set:
             controlsRef.current.target.set(0, 0, 0);
             controlsRef.current.object.position.set(40, 30, 60);
             controlsRef.current.update();
         }
-    }, [cameraResetTrigger, isMobile]);
+    }, [cameraResetTrigger]);
 
     const offset = 8; // mm gap from barrel end
     const fontSize = isMobile ? 3.5 : 5;
