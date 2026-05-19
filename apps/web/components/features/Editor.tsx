@@ -911,8 +911,9 @@ export const Editor = () => {
 
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                     <button
-                        onClick={async () => {
-                            const result = await shareBarrelToX();
+                        onClick={() => {
+                            // 同期処理: Safari のポップアップブロック回避のため await を挟まない
+                            const result = shareBarrelToX();
                             if (result.status === 'failed') {
                                 alert(`Xに投稿できませんでした: ${result.error}`);
                                 return;
