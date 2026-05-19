@@ -1,12 +1,15 @@
 /**
  * 3D Canvas のバレル画像をスクリーンショットして X (旧 Twitter) に投稿する。
  *
- * 戦略:
- *   1. WebGL canvas を Blob (PNG) に変換
- *   2. navigator.share (Web Share API Level 2) で画像ファイル付き共有を試行
- *      → iOS Safari / Android Chrome で OS のシェアシートが開く
- *   3. 失敗時はフォールバック: 画像をローカルダウンロード + X の投稿画面を開く
- *      → ユーザーが手動で画像を添付
+ * 動作:
+ *   1. WebGL canvas を Blob (PNG) に変換 → ローカルにダウンロード
+ *   2. X の投稿画面 (intent URL) を直接開く
+ *      → スマホで X アプリ未インストールなら twitter.com の投稿画面、
+ *        インストール済みなら universal link で X アプリが開く
+ *
+ * ※ OS のシェアシート (Web Share API) は使わない。ユーザーが「X に直接行きたい」
+ *    と望むため、選択肢を挟まず投稿画面に飛ばす。画像は別途ダウンロードされる
+ *    ので、X 投稿画面で添付する。
  *
  * 注意: Canvas は `preserveDrawingBuffer: true` で作成されている必要がある
  * (Scene.tsx で設定済み)。これがないと toBlob() が空のフレームを返す。
@@ -25,9 +28,7 @@ const buildXIntentUrl = (text: string, shareUrl?: string): string => {
 };
 
 export type ShareToXResult =
-    | { status: 'web-share' }
-    | { status: 'download-and-intent' }
-    | { status: 'cancelled' }
+    | { status: 'opened' }
     | { status: 'failed'; error: string };
 
 const captureCanvasBlob = async (): Promise<Blob | null> => {
@@ -49,27 +50,9 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
         return { status: 'failed', error: 'canvas not found or empty' };
     }
 
-    const file = new File([blob], 'barrel.png', { type: 'image/png' });
     const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
 
-    // Web Share API Level 2: 画像ファイル付きで共有
-    if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
-        try {
-            await navigator.share({
-                files: [file],
-                text: X_POST_TEXT,
-                ...(shareUrl ? { url: shareUrl } : {}),
-            });
-            return { status: 'web-share' };
-        } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') {
-                return { status: 'cancelled' };
-            }
-            // それ以外のエラーはフォールバックへ
-        }
-    }
-
-    // フォールバック: ダウンロード + X 投稿画面を開く
+    // 画像をローカルにダウンロード
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
@@ -79,6 +62,7 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
 
+    // X の投稿画面を直接開く (アプリインストール済みなら universal link で X アプリへ)
     window.open(buildXIntentUrl(X_POST_TEXT, shareUrl), '_blank', 'noopener,noreferrer');
-    return { status: 'download-and-intent' };
+    return { status: 'opened' };
 };

@@ -913,15 +913,11 @@ export const Editor = () => {
                     <button
                         onClick={async () => {
                             const result = await shareBarrelToX();
-                            if (result.status === 'download-and-intent') {
-                                alert(
-                                    'バレル画像をダウンロードしました。\n' +
-                                    'Xの投稿画面が開きます。ダウンロードした画像 (barrel.png) を添付してください。',
-                                );
-                            } else if (result.status === 'failed') {
+                            if (result.status === 'failed') {
                                 alert(`Xに投稿できませんでした: ${result.error}`);
+                                return;
                             }
-                            // web-share / cancelled の場合は何もしない
+                            // 画像はダウンロード済み・X 投稿画面は別タブで開いている
                         }}
                         className="w-full py-3 bg-black hover:bg-zinc-800 text-white font-bold rounded-lg transition-opacity flex items-center justify-center gap-2"
                         data-testid="share-to-x"
