@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 import { generateBarrelGeometry } from '@/lib/math/generator';
@@ -36,6 +36,14 @@ export const Barrel = () => {
         geom.translate(0, 0, -length / 2);
         return geom;
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape]);
+
+    // 古いBufferGeometryのGPUバッファを解放する。スマホで連続スライダー操作中に
+    // WebGLコンテキストが失われ、Canvasがremountして初期画面に戻る現象を防ぐ。
+    useEffect(() => {
+        return () => {
+            geometry.dispose();
+        };
+    }, [geometry]);
 
     const activeCut = activeCutId ? cuts.find(c => c.id === activeCutId) : null;
 
