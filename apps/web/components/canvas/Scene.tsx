@@ -33,7 +33,8 @@ export const Scene = () => {
     }, [cameraResetTrigger]);
 
     const offset = 8; // mm gap from barrel end
-    const fontSize = isMobile ? 3.5 : 5;
+    // ラベルは目印程度に。大きすぎるとバレル本体の視認を妨げるため抑えめ。
+    const fontSize = isMobile ? 2.2 : 3;
     const labelY = isMobile ? 8 : 4; // Move labels higher on mobile
 
     return (
@@ -70,15 +71,15 @@ export const Scene = () => {
                             position={[0, labelY, 0]}
                             fontSize={fontSize}
                             color="#ffffff"
+                            fillOpacity={0.6}
                             outlineColor="#000000"
-                            outlineWidth="15%"
-                            outlineOpacity={1}
-                            outlineBlur="20%"
+                            outlineWidth="6%"
+                            outlineOpacity={0.7}
+                            outlineBlur="8%"
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
                             material-depthTest={false} // Always visible through objects
-                            fontWeight="bold"
                         >
                             前 (チップ側)
                         </Text>
@@ -94,15 +95,15 @@ export const Scene = () => {
                             position={[0, labelY, 0]}
                             fontSize={fontSize}
                             color="#ffffff"
+                            fillOpacity={0.6}
                             outlineColor="#000000"
-                            outlineWidth="15%"
-                            outlineOpacity={1}
-                            outlineBlur="20%"
+                            outlineWidth="6%"
+                            outlineOpacity={0.7}
+                            outlineBlur="8%"
                             anchorX="center"
                             anchorY="middle"
                             renderOrder={1}
                             material-depthTest={false}
-                            fontWeight="bold"
                         >
                             後 (シャフト側)
                         </Text>
