@@ -5,6 +5,7 @@ import { generateProfile } from '@/lib/math/generator';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
+import { shareBarrelToX } from '@/lib/storage/share-x';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
 import { CutSelector, type CutParams } from './CutSelector';
@@ -909,6 +910,27 @@ export const Editor = () => {
                 </div>
 
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+                    <button
+                        onClick={async () => {
+                            const result = await shareBarrelToX();
+                            if (result.status === 'download-and-intent') {
+                                alert(
+                                    'バレル画像をダウンロードしました。\n' +
+                                    'Xの投稿画面が開きます。ダウンロードした画像 (barrel.png) を添付してください。',
+                                );
+                            } else if (result.status === 'failed') {
+                                alert(`Xに投稿できませんでした: ${result.error}`);
+                            }
+                            // web-share / cancelled の場合は何もしない
+                        }}
+                        className="w-full py-3 bg-black hover:bg-zinc-800 text-white font-bold rounded-lg transition-opacity flex items-center justify-center gap-2"
+                        data-testid="share-to-x"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                        </svg>
+                        バレル画像をXに投稿
+                    </button>
                     <button
                         onClick={async () => {
                             const dxfInput = {
