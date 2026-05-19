@@ -536,7 +536,7 @@ export const Editor = () => {
                             <NumStepper
                                 value={holeDepthFront}
                                 onChange={(v) => updateDimension('holeDepthFront', v)}
-                                step={0.5} min={0} max={30}
+                                step={0.5} min={8} max={30}
                                 className="w-full"
                                 bg="bg-zinc-50 dark:bg-zinc-800"
                             />
@@ -546,7 +546,7 @@ export const Editor = () => {
                             <NumStepper
                                 value={holeDepthRear}
                                 onChange={(v) => updateDimension('holeDepthRear', v)}
-                                step={0.5} min={0} max={30}
+                                step={0.5} min={8} max={30}
                                 className="w-full"
                                 bg="bg-zinc-50 dark:bg-zinc-800"
                             />
