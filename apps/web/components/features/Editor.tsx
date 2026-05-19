@@ -911,13 +911,12 @@ export const Editor = () => {
 
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                     <button
-                        onClick={async () => {
-                            const result = await shareBarrelToX();
+                        onClick={() => {
+                            const result = shareBarrelToX();
                             if (result.status === 'failed') {
                                 alert(`Xに投稿できませんでした: ${result.error}`);
                             }
-                            // opened (Web Share / desktop タブ): 何もしない
-                            // cancelled (ユーザーがシェアシートを閉じた): 静かに無視
+                            // opened: X 投稿画面が開いている。画像はクリップボード + ダウンロード済み
                         }}
                         className="w-full py-3 bg-black hover:bg-zinc-800 text-white font-bold rounded-lg transition-opacity flex items-center justify-center gap-2"
                         data-testid="share-to-x"

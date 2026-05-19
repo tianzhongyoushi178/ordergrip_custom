@@ -1,28 +1,29 @@
 /**
  * 3D Canvas のバレル画像をスクリーンショットして X (旧 Twitter) に投稿する。
  *
- * 動作 (プラットフォーム別):
- *   - モバイル (iOS / Android): Web Share API (navigator.share) で
- *     画像ファイル付きで共有。OS のシェアシートから X を選べば、
- *     X アプリの投稿画面に画像が**自動添付**された状態で遷移する。
- *   - Desktop: canvas.toDataURL() で同期的にダウンロード → window.open()
- *     で X 投稿画面を新タブで開く (デスクトップに X アプリは無いため)。
+ * 設計方針: **OS のシェアシートを出さない**。
+ *   X の intent URL も twitter:// カスタムスキームも画像をパラメータで
+ *   添付できないため、シェアシートを出さずに画像付き投稿を実現するには
+ *   クリップボード経由で画像を渡す必要がある。
  *
- * ※ 画像添付に Web Share API が必須な理由: X の intent URL も
- *    twitter:// カスタムスキームも、画像をパラメータで添付する手段を
- *    提供していない。クライアント完結で画像付き投稿を実現する唯一の
- *    Web 標準 API が navigator.share である。
+ * 動作 (すべて同期 - Safari のポップアップブロック回避):
+ *   1. canvas.toDataURL() で PNG dataURL を同期取得
+ *   2. <a download> で画像をローカル保存 (バックアップ)
+ *   3. dataURL を同期で Blob 化 → navigator.clipboard.write でコピー
+ *      (fire-and-forget; await しない)
+ *   4. プラットフォーム別に X 投稿画面へ遷移
+ *      - iOS:     twitter://post?message=...    (X アプリ起動)
+ *      - Android: intent://...                   (X アプリ起動、未インストール時 Web)
+ *      - Desktop: window.open(x.com/intent/post) (新タブで Web)
  *
- * ※ Desktop が同期処理な理由: Safari (macOS) は await を跨ぐと
- *    「ユーザージェスチャー」が消費されたと判定し、後続の window.open()
- *    をポップアップブロックする。toDataURL は同期 API なので await 不要。
+ * 投稿後、ユーザーが X の本文エリアで長押し→「ペースト」を選ぶと画像が添付される。
  *
  * ※ Canvas は `preserveDrawingBuffer: true` で作成されている必要がある
  *    (Scene.tsx で設定済み)。
  */
 
 export const X_POST_TEXT =
-    '世界で1つだけのオリジナルダーツバレルを設計しました! #OrderGrip #ダーツ #バレル';
+    '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP';
 
 // X 公式の現行ドメイン。iOS Universal Links / Android App Links は x.com で登録されている。
 export const X_INTENT_URL_BASE = 'https://x.com/intent/post';
@@ -35,8 +36,7 @@ const buildXIntentUrl = (text: string, shareUrl?: string): string => {
 };
 
 export type ShareToXResult =
-    | { status: 'opened' }
-    | { status: 'cancelled' }
+    | { status: 'opened'; clipboardCopied: boolean }
     | { status: 'failed'; error: string };
 
 type Platform = 'ios' | 'android' | 'desktop';
@@ -52,57 +52,48 @@ const detectPlatform = (): Platform => {
     return 'desktop';
 };
 
-const captureCanvasBlob = (canvas: HTMLCanvasElement): Promise<Blob | null> =>
-    new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));
+/** dataURL (data:image/png;base64,xxx) を同期で Blob に変換 */
+const dataUrlToBlobSync = (dataUrl: string): Blob => {
+    const commaIdx = dataUrl.indexOf(',');
+    const meta = dataUrl.slice(0, commaIdx);
+    const data = dataUrl.slice(commaIdx + 1);
+    const mimeMatch = meta.match(/data:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const bytes = atob(data);
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    return new Blob([buf], { type: mime });
+};
 
-export const shareBarrelToX = async (): Promise<ShareToXResult> => {
+/** クリップボードへ画像コピーを試行 (fire-and-forget)。成功可否を Boolean で返す Promise を返却 */
+const tryCopyImageToClipboard = (blob: Blob): Promise<boolean> => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard || typeof ClipboardItem === 'undefined') {
+        return Promise.resolve(false);
+    }
+    try {
+        const item = new ClipboardItem({ [blob.type]: blob });
+        return navigator.clipboard.write([item]).then(() => true).catch(() => false);
+    } catch {
+        return Promise.resolve(false);
+    }
+};
+
+/** iOS の X アプリ用カスタムスキーム */
+const buildIOSAppUrl = (text: string): string =>
+    `twitter://post?message=${encodeURIComponent(text)}`;
+
+/** Android Chrome 用 intent URI */
+const buildAndroidIntentUri = (text: string, webFallbackUrl: string): string =>
+    `intent://post?text=${encodeURIComponent(text)}` +
+    `#Intent;scheme=twitter;package=com.twitter.android;` +
+    `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
+
+export const shareBarrelToX = (): ShareToXResult => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
         return { status: 'failed', error: 'canvas not found' };
     }
 
-    const platform = detectPlatform();
-    const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
-
-    // モバイル: Web Share API で画像ファイル付き共有 (X アプリで画像自動添付)
-    if (platform === 'ios' || platform === 'android') {
-        let blob: Blob | null;
-        try {
-            blob = await captureCanvasBlob(canvas);
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { status: 'failed', error: `screenshot failed: ${msg}` };
-        }
-        if (!blob) {
-            return { status: 'failed', error: 'canvas toBlob failed' };
-        }
-
-        const file = new File([blob], 'barrel.png', { type: 'image/png' });
-        if (!navigator.canShare?.({ files: [file] })) {
-            return {
-                status: 'failed',
-                error: 'このブラウザは画像付き共有 (Web Share API Level 2) に対応していません。最新の Safari / Chrome をお使いください。',
-            };
-        }
-
-        try {
-            await navigator.share({
-                files: [file],
-                text: X_POST_TEXT,
-                ...(shareUrl ? { url: shareUrl } : {}),
-            });
-            return { status: 'opened' };
-        } catch (err) {
-            if (err instanceof Error && err.name === 'AbortError') {
-                return { status: 'cancelled' };
-            }
-            const msg = err instanceof Error ? err.message : String(err);
-            return { status: 'failed', error: `共有失敗: ${msg}` };
-        }
-    }
-
-    // Desktop: 同期処理でダウンロード + X 投稿画面を新タブで開く
-    // (デスクトップに X アプリ無し、画像は手動添付してもらう)
     let dataUrl: string;
     try {
         dataUrl = canvas.toDataURL('image/png');
@@ -114,6 +105,10 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
         return { status: 'failed', error: 'canvas is empty' };
     }
 
+    const blob = dataUrlToBlobSync(dataUrl);
+    const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+    // 1) 画像をローカルにバックアップダウンロード (クリップボード失敗時の保険)
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = 'barrel.png';
@@ -121,6 +116,23 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     link.click();
     link.remove();
 
-    window.open(buildXIntentUrl(X_POST_TEXT, shareUrl), '_blank', 'noopener,noreferrer');
-    return { status: 'opened' };
+    // 2) クリップボードに画像コピー (fire-and-forget、await しない)
+    //    成功すれば X の本文エリアで「ペースト」で添付できる
+    let clipboardCopied = false;
+    tryCopyImageToClipboard(blob).then((ok) => { clipboardCopied = ok; });
+    // 注: ここでは即時 false のままだが、UI フィードバック用には参考値
+
+    // 3) プラットフォーム別に X 投稿画面へ遷移 (同じユーザージェスチャー内で実行)
+    const platform = detectPlatform();
+    const webUrl = buildXIntentUrl(X_POST_TEXT, shareUrl);
+
+    if (platform === 'ios') {
+        window.location.href = buildIOSAppUrl(X_POST_TEXT);
+    } else if (platform === 'android') {
+        window.location.href = buildAndroidIntentUri(X_POST_TEXT, webUrl);
+    } else {
+        window.open(webUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    return { status: 'opened', clipboardCopied };
 };
