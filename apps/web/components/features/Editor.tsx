@@ -911,14 +911,13 @@ export const Editor = () => {
 
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                     <button
-                        onClick={() => {
-                            // 同期処理: Safari のポップアップブロック回避のため await を挟まない
-                            const result = shareBarrelToX();
+                        onClick={async () => {
+                            const result = await shareBarrelToX();
                             if (result.status === 'failed') {
                                 alert(`Xに投稿できませんでした: ${result.error}`);
-                                return;
                             }
-                            // 画像はダウンロード済み・X 投稿画面は別タブで開いている
+                            // opened (Web Share / desktop タブ): 何もしない
+                            // cancelled (ユーザーがシェアシートを閉じた): 静かに無視
                         }}
                         className="w-full py-3 bg-black hover:bg-zinc-800 text-white font-bold rounded-lg transition-opacity flex items-center justify-center gap-2"
                         data-testid="share-to-x"

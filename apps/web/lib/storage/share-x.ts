@@ -1,23 +1,24 @@
 /**
  * 3D Canvas のバレル画像をスクリーンショットして X (旧 Twitter) に投稿する。
  *
- * 動作 (すべて同期):
- *   1. canvas.toDataURL() で PNG dataURL を取得 (同期API)
- *   2. <a download> で画像をローカルにダウンロード
- *   3. window.open() で X の投稿画面 (intent URL) を新タブで開く
+ * 動作 (プラットフォーム別):
+ *   - モバイル (iOS / Android): Web Share API (navigator.share) で
+ *     画像ファイル付きで共有。OS のシェアシートから X を選べば、
+ *     X アプリの投稿画面に画像が**自動添付**された状態で遷移する。
+ *   - Desktop: canvas.toDataURL() で同期的にダウンロード → window.open()
+ *     で X 投稿画面を新タブで開く (デスクトップに X アプリは無いため)。
  *
- * ※ 同期処理にする理由: Safari (iOS/macOS) は `await` を跨ぐと
+ * ※ 画像添付に Web Share API が必須な理由: X の intent URL も
+ *    twitter:// カスタムスキームも、画像をパラメータで添付する手段を
+ *    提供していない。クライアント完結で画像付き投稿を実現する唯一の
+ *    Web 標準 API が navigator.share である。
+ *
+ * ※ Desktop が同期処理な理由: Safari (macOS) は await を跨ぐと
  *    「ユーザージェスチャー」が消費されたと判定し、後続の window.open()
- *    をポップアップブロックする。そのためクリックハンドラから一切 await
- *    せず、その場で download と open を実行する。
- *
- * ※ x.com ドメインを使う理由: 旧 twitter.com/intent/tweet では X アプリの
- *    Universal Links (iOS) / App Links (Android) の発火が弱く、モバイル
- *    Chrome で Web ページが開いてしまう。x.com 配下の URL のほうがアプリ
- *    起動の成功率が高い。
+ *    をポップアップブロックする。toDataURL は同期 API なので await 不要。
  *
  * ※ Canvas は `preserveDrawingBuffer: true` で作成されている必要がある
- *    (Scene.tsx で設定済み)。これがないと toDataURL() が空フレームを返す。
+ *    (Scene.tsx で設定済み)。
  */
 
 export const X_POST_TEXT =
@@ -35,6 +36,7 @@ const buildXIntentUrl = (text: string, shareUrl?: string): string => {
 
 export type ShareToXResult =
     | { status: 'opened' }
+    | { status: 'cancelled' }
     | { status: 'failed'; error: string };
 
 type Platform = 'ios' | 'android' | 'desktop';
@@ -50,22 +52,57 @@ const detectPlatform = (): Platform => {
     return 'desktop';
 };
 
-/** iOS の X アプリ用カスタムスキーム (X 公式アプリは旧 twitter:// を維持) */
-const buildIOSAppUrl = (text: string): string =>
-    `twitter://post?message=${encodeURIComponent(text)}`;
+const captureCanvasBlob = (canvas: HTMLCanvasElement): Promise<Blob | null> =>
+    new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));
 
-/** Android Chrome 用 intent URI。X アプリ未インストールなら browser_fallback_url が開く */
-const buildAndroidIntentUri = (text: string, webFallbackUrl: string): string =>
-    `intent://post?text=${encodeURIComponent(text)}` +
-    `#Intent;scheme=twitter;package=com.twitter.android;` +
-    `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
-
-export const shareBarrelToX = (): ShareToXResult => {
+export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
         return { status: 'failed', error: 'canvas not found' };
     }
 
+    const platform = detectPlatform();
+    const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+    // モバイル: Web Share API で画像ファイル付き共有 (X アプリで画像自動添付)
+    if (platform === 'ios' || platform === 'android') {
+        let blob: Blob | null;
+        try {
+            blob = await captureCanvasBlob(canvas);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return { status: 'failed', error: `screenshot failed: ${msg}` };
+        }
+        if (!blob) {
+            return { status: 'failed', error: 'canvas toBlob failed' };
+        }
+
+        const file = new File([blob], 'barrel.png', { type: 'image/png' });
+        if (!navigator.canShare?.({ files: [file] })) {
+            return {
+                status: 'failed',
+                error: 'このブラウザは画像付き共有 (Web Share API Level 2) に対応していません。最新の Safari / Chrome をお使いください。',
+            };
+        }
+
+        try {
+            await navigator.share({
+                files: [file],
+                text: X_POST_TEXT,
+                ...(shareUrl ? { url: shareUrl } : {}),
+            });
+            return { status: 'opened' };
+        } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                return { status: 'cancelled' };
+            }
+            const msg = err instanceof Error ? err.message : String(err);
+            return { status: 'failed', error: `共有失敗: ${msg}` };
+        }
+    }
+
+    // Desktop: 同期処理でダウンロード + X 投稿画面を新タブで開く
+    // (デスクトップに X アプリ無し、画像は手動添付してもらう)
     let dataUrl: string;
     try {
         dataUrl = canvas.toDataURL('image/png');
@@ -77,9 +114,6 @@ export const shareBarrelToX = (): ShareToXResult => {
         return { status: 'failed', error: 'canvas is empty' };
     }
 
-    const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
-
-    // 1) 画像を同期的にダウンロード (dataURL は <a download> で直接保存できる)
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = 'barrel.png';
@@ -87,23 +121,6 @@ export const shareBarrelToX = (): ShareToXResult => {
     link.click();
     link.remove();
 
-    // 2) プラットフォーム別に X アプリへの遷移を試行
-    const platform = detectPlatform();
-    const webUrl = buildXIntentUrl(X_POST_TEXT, shareUrl);
-
-    if (platform === 'ios') {
-        // iOS: カスタムスキームを location.href にセットして X アプリを起動
-        // Universal Links (x.com/...) はブラウザ内 navigation では発火しないため、
-        // 確実にアプリを開くには twitter:// スキームを使う必要がある。
-        window.location.href = buildIOSAppUrl(X_POST_TEXT);
-    } else if (platform === 'android') {
-        // Android Chrome: intent URI。X アプリがインストールされていればアプリ起動、
-        // 未インストールなら browser_fallback_url (Web 投稿画面) にフォールバック。
-        window.location.href = buildAndroidIntentUri(X_POST_TEXT, webUrl);
-    } else {
-        // Desktop: アプリが存在しないので Web 投稿画面を新タブで開く
-        window.open(webUrl, '_blank', 'noopener,noreferrer');
-    }
-
+    window.open(buildXIntentUrl(X_POST_TEXT, shareUrl), '_blank', 'noopener,noreferrer');
     return { status: 'opened' };
 };
