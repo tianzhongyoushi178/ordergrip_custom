@@ -1,25 +1,25 @@
 /**
  * 3D Canvas のバレル画像をスクリーンショットして X (旧 Twitter) に投稿する。
  *
- * 設計方針: **OS のシェアシートを出さない**。
- *   X の intent URL も twitter:// カスタムスキームも画像をパラメータで
- *   添付できないため、シェアシートを出さずに画像付き投稿を実現するには
- *   クリップボード経由で画像を渡す必要がある。
+ * ハイブリッド方式: 画像を「ダウンロード」「クリップボード」「Web Share」の
+ * 3経路で多重化し、ユーザーがどの経路を選んでも画像が必ず手元にある状態にする。
  *
- * 動作 (すべて同期 - Safari のポップアップブロック回避):
- *   1. canvas.toDataURL() で PNG dataURL を同期取得
+ * 動作:
+ *   1. canvas.toDataURL() で PNG を同期取得
  *   2. <a download> で画像をローカル保存 (バックアップ)
- *   3. dataURL を同期で Blob 化 → navigator.clipboard.write でコピー
- *      (fire-and-forget; await しない)
- *   4. プラットフォーム別に X 投稿画面へ遷移
- *      - iOS:     twitter://post?message=...    (X アプリ起動)
- *      - Android: intent://...                   (X アプリ起動、未インストール時 Web)
- *      - Desktop: window.open(x.com/intent/post) (新タブで Web)
+ *   3. 同期で Blob 化 → navigator.clipboard.write で fire-and-forget コピー
+ *   4. モバイル: Web Share API (画像ファイル付き) を試行
+ *      - シェアシートで X を選ぶ → 画像が自動添付された投稿画面が開く (ベスト)
+ *      - シェアシートをキャンセル → X アプリへ intent URL で直接遷移
+ *        (ユーザーは本文長押し→「ペースト」でクリップボードの画像を添付できる)
+ *   5. Desktop: x.com/intent/post を新タブで開く (X デスクトップアプリは無い)
  *
- * 投稿後、ユーザーが X の本文エリアで長押し→「ペースト」を選ぶと画像が添付される。
+ * 結果としてユーザーは:
+ *   - シェアシート経由なら 1 タップで画像自動添付の X 投稿画面に到達
+ *   - シェアシートが煩わしければキャンセル → 直接 X、画像はペーストで添付
+ *   - 最悪 Web Share が使えなくても、ダウンロードした barrel.png を手動添付可能
  *
- * ※ Canvas は `preserveDrawingBuffer: true` で作成されている必要がある
- *    (Scene.tsx で設定済み)。
+ * ※ Canvas は `preserveDrawingBuffer: true` (Scene.tsx で設定済み)。
  */
 
 export const X_POST_TEXT =
@@ -36,7 +36,7 @@ const buildXIntentUrl = (text: string, shareUrl?: string): string => {
 };
 
 export type ShareToXResult =
-    | { status: 'opened'; clipboardCopied: boolean }
+    | { status: 'opened' }
     | { status: 'failed'; error: string };
 
 type Platform = 'ios' | 'android' | 'desktop';
@@ -88,7 +88,15 @@ const buildAndroidIntentUri = (text: string, webFallbackUrl: string): string =>
     `#Intent;scheme=twitter;package=com.twitter.android;` +
     `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
 
-export const shareBarrelToX = (): ShareToXResult => {
+const openMobileIntent = (platform: 'ios' | 'android', webFallbackUrl: string): void => {
+    if (platform === 'ios') {
+        window.location.href = buildIOSAppUrl(X_POST_TEXT);
+    } else {
+        window.location.href = buildAndroidIntentUri(X_POST_TEXT, webFallbackUrl);
+    }
+};
+
+export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
         return { status: 'failed', error: 'canvas not found' };
@@ -107,8 +115,10 @@ export const shareBarrelToX = (): ShareToXResult => {
 
     const blob = dataUrlToBlobSync(dataUrl);
     const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const webUrl = buildXIntentUrl(X_POST_TEXT, shareUrl);
+    const platform = detectPlatform();
 
-    // 1) 画像をローカルにバックアップダウンロード (クリップボード失敗時の保険)
+    // (1) 画像を同期でローカルにダウンロード (最終フォールバック)
     const link = document.createElement('a');
     link.href = dataUrl;
     link.download = 'barrel.png';
@@ -116,23 +126,40 @@ export const shareBarrelToX = (): ShareToXResult => {
     link.click();
     link.remove();
 
-    // 2) クリップボードに画像コピー (fire-and-forget、await しない)
-    //    成功すれば X の本文エリアで「ペースト」で添付できる
-    let clipboardCopied = false;
-    tryCopyImageToClipboard(blob).then((ok) => { clipboardCopied = ok; });
-    // 注: ここでは即時 false のままだが、UI フィードバック用には参考値
+    // (2) クリップボードに画像コピー (fire-and-forget、ペースト用)
+    void tryCopyImageToClipboard(blob);
 
-    // 3) プラットフォーム別に X 投稿画面へ遷移 (同じユーザージェスチャー内で実行)
-    const platform = detectPlatform();
-    const webUrl = buildXIntentUrl(X_POST_TEXT, shareUrl);
-
-    if (platform === 'ios') {
-        window.location.href = buildIOSAppUrl(X_POST_TEXT);
-    } else if (platform === 'android') {
-        window.location.href = buildAndroidIntentUri(X_POST_TEXT, webUrl);
-    } else {
+    // (3) Desktop: Web 投稿画面を新タブで開いて終了
+    if (platform === 'desktop') {
         window.open(webUrl, '_blank', 'noopener,noreferrer');
+        return { status: 'opened' };
     }
 
-    return { status: 'opened', clipboardCopied };
+    // (4) モバイル: まず Web Share API で「画像ファイル付き共有」を試行
+    //     成功すれば X 投稿画面で画像が自動添付される
+    const file = new File([blob], 'barrel.png', { type: 'image/png' });
+    if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
+        try {
+            await navigator.share({
+                files: [file],
+                text: X_POST_TEXT,
+                ...(shareUrl ? { url: shareUrl } : {}),
+            });
+            return { status: 'opened' };
+        } catch (err) {
+            // ユーザーがシェアシートをキャンセル / その他エラー
+            // → X アプリへ intent URL で直接遷移 (画像はクリップボードからペーストで添付)
+            if (err instanceof Error && err.name === 'AbortError') {
+                openMobileIntent(platform, webUrl);
+                return { status: 'opened' };
+            }
+            // 想定外のエラーでも一応 intent URL で X を開く
+            openMobileIntent(platform, webUrl);
+            return { status: 'opened' };
+        }
+    }
+
+    // (5) Web Share API が使えないモバイル: intent URL のみ
+    openMobileIntent(platform, webUrl);
+    return { status: 'opened' };
 };
