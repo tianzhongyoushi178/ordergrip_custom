@@ -80,8 +80,8 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   length: 45.0, // mm
   maxDiameter: 7.0, // mm
   materialDensity: 17.0, // 90% Tungsten default
-  holeDepthFront: 10.0,
-  holeDepthRear: 15.0,
+  holeDepthFront: 8.0,
+  holeDepthRear: 8.0,
   frontTaperLength: 10,
   rearTaperLength: 10,
   shapeType: 'torpedo',

@@ -8,8 +8,8 @@ describe('useBarrelStore', () => {
       length: 45.0,
       maxDiameter: 7.0,
       materialDensity: 17.0,
-      holeDepthFront: 10.0,
-      holeDepthRear: 15.0,
+      holeDepthFront: 8.0,
+      holeDepthRear: 8.0,
       frontTaperLength: 10,
       rearTaperLength: 10,
       shapeType: 'torpedo',
@@ -28,8 +28,8 @@ describe('useBarrelStore', () => {
       expect(state.length).toBe(45.0);
       expect(state.maxDiameter).toBe(7.0);
       expect(state.materialDensity).toBe(17.0);
-      expect(state.holeDepthFront).toBe(10.0);
-      expect(state.holeDepthRear).toBe(15.0);
+      expect(state.holeDepthFront).toBe(8.0);
+      expect(state.holeDepthRear).toBe(8.0);
       expect(state.frontTaperLength).toBe(10);
       expect(state.rearTaperLength).toBe(10);
       expect(state.shapeType).toBe('torpedo');
