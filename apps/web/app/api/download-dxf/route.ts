@@ -16,14 +16,23 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 
 /** プロキシを許可するホスト (オープンリダイレクト/SSRF 防止) */
-const ALLOWED_HOSTS = new Set([
+const EXACT_ALLOWED_HOSTS = new Set([
     'litter.catbox.moe',
     'files.catbox.moe',
-    'a.uguu.se',
-    'h.uguu.se',
     'tmpfiles.org',
     'www.tmpfiles.org',
 ]);
+
+/**
+ * uguu.se はアップロード結果のホストを `a/h/o/...uguu.se` のように
+ * シャード単位で動的に変える。リテラル一致では新シャードが出るたびに 400 が出る
+ * (`o.uguu.se` で実発生) ため、サブドメインをまとめて許可する。
+ */
+const isHostAllowed = (hostname: string): boolean => {
+    if (EXACT_ALLOWED_HOSTS.has(hostname)) return true;
+    if (hostname === 'uguu.se' || hostname.endsWith('.uguu.se')) return true;
+    return false;
+};
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
     const urlParam = req.nextUrl.searchParams.get('u');
@@ -44,7 +53,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: 'only https URLs allowed' }, { status: 400 });
     }
 
-    if (!ALLOWED_HOSTS.has(upstream.hostname)) {
+    if (!isHostAllowed(upstream.hostname)) {
         return NextResponse.json(
             { error: `host not allowed: ${upstream.hostname}` },
             { status: 400 },
