@@ -1,10 +1,46 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { useBarrelStore, OutlinePoint, OutlineInterp } from '@/lib/store/useBarrelStore';
 import { NumStepper } from './Editor';
 
 const MIN_DIAMETER = 4.0;
 const MAX_DIAMETER = 10.0;
+
+/** d(z) を Catmull-Rom (cubic Hermite) で補間。SVG プレビュー描画用 */
+const interpolateD = (z: number, pts: OutlinePoint[], mode: OutlineInterp): number => {
+    const n = pts.length;
+    if (n === 0) return 0;
+    if (z <= pts[0].z) return pts[0].d;
+    if (z >= pts[n - 1].z) return pts[n - 1].d;
+    let i = 0;
+    for (let k = 0; k < n - 1; k++) {
+        if (z >= pts[k].z && z <= pts[k + 1].z) { i = k; break; }
+    }
+    const p0 = pts[i];
+    const p1 = pts[i + 1];
+    const dz = p1.z - p0.z;
+    if (dz < 1e-9) return p0.d;
+    const t = (z - p0.z) / dz;
+    if (mode === 'linear' || n < 3) return p0.d + (p1.d - p0.d) * t;
+    const m0 = i > 0
+        ? (p1.d - pts[i - 1].d) / (p1.z - pts[i - 1].z)
+        : (p1.d - p0.d) / dz;
+    const m1 = i + 2 < n
+        ? (pts[i + 2].d - p0.d) / (pts[i + 2].z - p0.z)
+        : (p1.d - p0.d) / dz;
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * p0.d
+        + (t3 - 2 * t2 + t) * dz * m0
+        + (-2 * t3 + 3 * t2) * p1.d
+        + (t3 - t2) * dz * m1;
+};
+
+// SVG viewBox 設定: 横は z [0, length] にマップ、縦は径 [0, MAX_DIAMETER] を反転表示
+const SVG_W = 400;
+const SVG_H = 140;
+const SVG_PAD = 12;
 
 /**
  * アウトライン(バレル外形プロファイル)の制御点を編集する UI。
@@ -66,8 +102,123 @@ export const OutlineEditor = () => {
         setOutline(outline.filter((_, i) => i !== index));
     };
 
+    // --- SVG ドラッグ編集 ---
+    const svgRef = useRef<SVGSVGElement>(null);
+    const dragIdxRef = useRef<number | null>(null); // 同期的に参照する用
+    const [dragIdx, setDragIdx] = useState<number | null>(null); // 描画用
+
+    // SVG 座標 ⇄ outline 座標の変換
+    const innerW = SVG_W - SVG_PAD * 2;
+    const innerH = SVG_H - SVG_PAD * 2;
+    const zToX = (z: number) => SVG_PAD + (z / Math.max(0.001, length)) * innerW;
+    const dToY = (d: number) => SVG_PAD + (1 - d / MAX_DIAMETER) * innerH;
+    const xToZ = (x: number) => ((x - SVG_PAD) / innerW) * length;
+    const yToD = (y: number) => (1 - (y - SVG_PAD) / innerH) * MAX_DIAMETER;
+
+    /** 連続プレビュー曲線用のサンプリング (40 ステップ程度で十分滑らか) */
+    const samples = (() => {
+        if (outline.length < 2) return [];
+        const N = 80;
+        const out: { x: number; y: number }[] = [];
+        for (let i = 0; i <= N; i++) {
+            const z = (i / N) * length;
+            const d = interpolateD(z, outline, outlineInterp);
+            out.push({ x: zToX(z), y: dToY(d) });
+        }
+        return out;
+    })();
+
+    const svgPointToOutline = (clientX: number, clientY: number) => {
+        const svg = svgRef.current;
+        if (!svg) return null;
+        const rect = svg.getBoundingClientRect();
+        const x = ((clientX - rect.left) / rect.width) * SVG_W;
+        const y = ((clientY - rect.top) / rect.height) * SVG_H;
+        return { z: xToZ(x), d: yToD(y) };
+    };
+
+    const onPointerDownPoint = (idx: number) => (e: React.PointerEvent<SVGCircleElement>) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dragIdxRef.current = idx; // 同期的に確定 (state は次レンダーまで反映されないため)
+        setDragIdx(idx);
+    };
+    const onPointerMovePoint = (e: React.PointerEvent<SVGCircleElement>) => {
+        const idx = dragIdxRef.current;
+        if (idx === null) return;
+        const p = svgPointToOutline(e.clientX, e.clientY);
+        if (!p) return;
+        // store の最新値を直接読む (closure の stale な outline/length を回避)
+        const state = useBarrelStore.getState();
+        const isFirst = idx === 0;
+        const isLast = idx === state.outline.length - 1;
+        const next: OutlinePoint = {
+            z: isFirst ? 0 : isLast ? state.length : Math.min(state.length, Math.max(0, p.z)),
+            d: Math.min(MAX_DIAMETER, Math.max(MIN_DIAMETER, p.d)),
+        };
+        // ドラッグ中はソートしない (idx の物理的な対応関係を維持)
+        const newOutline = state.outline.map((pt, i) => (i === idx ? next : pt));
+        state.setOutline(newOutline);
+    };
+    const onPointerUpPoint = (e: React.PointerEvent<SVGCircleElement>) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        dragIdxRef.current = null;
+        setDragIdx(null);
+        // ドラッグ終了時にソートして z 昇順を回復
+        const state = useBarrelStore.getState();
+        const sorted = [...state.outline].sort((a, b) => a.z - b.z);
+        state.setOutline(sorted);
+    };
+
     return (
         <div className="space-y-3" data-testid="outline-editor">
+            {/* SVG プレビュー: 制御点をドラッグして編集 */}
+            <div className="bg-white dark:bg-zinc-950 rounded border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <svg
+                    ref={svgRef}
+                    viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+                    className="w-full h-auto touch-none select-none"
+                    style={{ touchAction: 'none' }}
+                >
+                    {/* 中心線 */}
+                    <line
+                        x1={SVG_PAD} y1={dToY(0)} x2={SVG_W - SVG_PAD} y2={dToY(0)}
+                        stroke="currentColor" strokeOpacity="0.15" strokeDasharray="2 2"
+                    />
+                    {/* 上下対称プロファイル塗りつぶし */}
+                    {samples.length > 1 && (
+                        <path
+                            d={
+                                'M ' + samples.map((s) => `${s.x.toFixed(2)},${s.y.toFixed(2)}`).join(' L ') +
+                                ' L ' + samples.slice().reverse().map((s) => `${s.x.toFixed(2)},${(2 * dToY(0) - s.y).toFixed(2)}`).join(' L ') +
+                                ' Z'
+                            }
+                            fill="rgb(99 102 241 / 0.15)"
+                            stroke="rgb(99 102 241)"
+                            strokeWidth="1.2"
+                        />
+                    )}
+                    {/* 制御点 (上半分のみ) */}
+                    {outline.map((p, i) => (
+                        <circle
+                            key={i}
+                            cx={zToX(p.z)}
+                            cy={dToY(p.d)}
+                            r={dragIdx === i ? 7 : 5}
+                            fill={dragIdx === i ? 'rgb(99 102 241)' : 'white'}
+                            stroke="rgb(99 102 241)"
+                            strokeWidth="2"
+                            className="cursor-grab active:cursor-grabbing"
+                            onPointerDown={onPointerDownPoint(i)}
+                            onPointerMove={onPointerMovePoint}
+                            onPointerUp={onPointerUpPoint}
+                            onPointerCancel={onPointerUpPoint}
+                        />
+                    ))}
+                </svg>
+                <div className="text-[10px] text-zinc-400 px-2 pb-1.5 text-center">
+                    制御点をドラッグで編集 (前後端は z 固定・径のみ)
+                </div>
+            </div>
             {/* 補間方式トグル */}
             <div>
                 <label className="text-xs font-medium text-zinc-500 block mb-1.5">補間方式</label>
