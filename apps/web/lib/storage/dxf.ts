@@ -93,6 +93,7 @@ interface DxfBarrelInput {
     holeDepthFront: number;
     holeDepthRear: number;
     outline: BarrelState['outline'];
+    outlineInterp?: BarrelState['outlineInterp'];
     frontEndShape: BarrelState['frontEndShape'];
     rearEndShape: BarrelState['rearEndShape'];
     materialDensity: number;
@@ -176,6 +177,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         input.outline,
         input.frontEndShape,
         input.rearEndShape,
+        input.outlineInterp ?? 'smooth',
     );
     const basePts = baseProfile.map((p) => ({ z: p.y, r: p.x }));
 

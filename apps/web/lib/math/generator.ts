@@ -1,5 +1,59 @@
 import * as THREE from 'three';
-import { CutZone, EndShape } from '../store/useBarrelStore';
+import { CutZone, EndShape, OutlineInterp } from '../store/useBarrelStore';
+
+/**
+ * アウトラインの d(z) を制御点間で補間する。
+ * 'linear': 折れ線
+ * 'smooth': Catmull-Rom 相当の cubic Hermite (中央差分接線、非一様 z 対応)
+ *
+ * @param points z 昇順ソート済みの制御点。長さ >= 2 を想定。
+ */
+const interpolateOutline = (
+    z: number,
+    points: { z: number; d: number }[],
+    mode: OutlineInterp,
+): number => {
+    const n = points.length;
+    if (n === 0) return 0;
+    if (z <= points[0].z) return points[0].d;
+    if (z >= points[n - 1].z) return points[n - 1].d;
+
+    // 現在のセグメント [points[i], points[i+1]] を探索
+    let i = 0;
+    for (let k = 0; k < n - 1; k++) {
+        if (z >= points[k].z && z <= points[k + 1].z) {
+            i = k;
+            break;
+        }
+    }
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const dz = p1.z - p0.z;
+    if (dz < 1e-9) return p0.d;
+    const t = (z - p0.z) / dz;
+
+    if (mode === 'linear' || n < 3) {
+        return p0.d + (p1.d - p0.d) * t;
+    }
+
+    // 接線 (中央差分、端点は片側差分)
+    const m0 = i > 0
+        ? (p1.d - points[i - 1].d) / (p1.z - points[i - 1].z)
+        : (p1.d - p0.d) / dz;
+    const m1 = i + 2 < n
+        ? (points[i + 2].d - p0.d) / (points[i + 2].z - p0.z)
+        : (p1.d - p0.d) / dz;
+
+    // Cubic Hermite 基底関数
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const h00 = 2 * t3 - 3 * t2 + 1;
+    const h10 = t3 - 2 * t2 + t;
+    const h01 = -2 * t3 + 3 * t2;
+    const h11 = t3 - t2;
+
+    return h00 * p0.d + h10 * dz * m0 + h01 * p1.d + h11 * dz * m1;
+};
 
 /** 前後端の形状を計算: テーパー(直線) or R(楕円弧).
  *  前端:  z=0 で tipR、z=taperLen で baseR
@@ -37,7 +91,8 @@ export const generateProfile = (
     rearTaperLen: number = 10,
     outline: { z: number, d: number }[] = [],
     frontEndShape: EndShape = 'taper',
-    rearEndShape: EndShape = 'taper'
+    rearEndShape: EndShape = 'taper',
+    outlineInterp: OutlineInterp = 'smooth',
 ): THREE.Vector2[] => {
     const points: THREE.Vector2[] = [];
     const baseRadius = maxDiameter / 2;
@@ -61,26 +116,8 @@ export const generateProfile = (
 
         // 1. Basic Shape Profile
         if (sortedOutline.length > 1) {
-            // --- OUTLINE INTERPOLATION ---
-            // Find segment [p1, p2] where p1.z <= z <= p2.z
-            // If z is outside range, clamp to nearest end (or maybe just use end value?) here we clamp.
-
-            if (z <= sortedOutline[0].z) {
-                r = sortedOutline[0].d / 2;
-            } else if (z >= sortedOutline[sortedOutline.length - 1].z) {
-                r = sortedOutline[sortedOutline.length - 1].d / 2;
-            } else {
-                for (let k = 0; k < sortedOutline.length - 1; k++) {
-                    const p1 = sortedOutline[k];
-                    const p2 = sortedOutline[k + 1];
-                    if (z >= p1.z && z <= p2.z) {
-                        const ratio = (z - p1.z) / (p2.z - p1.z);
-                        const d = p1.d + (p2.d - p1.d) * ratio;
-                        r = d / 2;
-                        break;
-                    }
-                }
-            }
+            // --- OUTLINE INTERPOLATION (linear or Catmull-Rom smooth) ---
+            r = interpolateOutline(z, sortedOutline, outlineInterp) / 2;
         } else {
             // --- TRADITIONAL END SHAPING (Fallback) ---
             // Front End (taper or round)
@@ -263,10 +300,11 @@ export const generateBarrelGeometry = (
     holeDepthRear: number,
     outline: { z: number, d: number }[] = [],
     frontEndShape: EndShape = 'taper',
-    rearEndShape: EndShape = 'taper'
+    rearEndShape: EndShape = 'taper',
+    outlineInterp: OutlineInterp = 'smooth',
 ): THREE.BufferGeometry => {
     // 1. Get Base Profile (Outer surface only)
-    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape);
+    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
 
     // 2. Construct FULL Profile (Inner -> Outer -> Inner)
     // 2BA Hole Radius approx 2.1mm

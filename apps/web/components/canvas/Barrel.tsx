@@ -28,14 +28,14 @@ const CutHighlight = ({ startZ, endZ, length, maxDiameter }: {
 };
 
 export const Barrel = () => {
-    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape, activeCutId } = useBarrelStore();
+    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, activeCutId } = useBarrelStore();
 
     const geometry = useMemo(() => {
-        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape);
+        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape, outlineInterp);
         geom.rotateX(-Math.PI / 2);
         geom.translate(0, 0, -length / 2);
         return geom;
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape]);
 
     // 古いBufferGeometryのGPUバッファを解放する。スマホで連続スライダー操作中に
     // WebGLコンテキストが失われ、Canvasがremountして初期画面に戻る現象を防ぐ。

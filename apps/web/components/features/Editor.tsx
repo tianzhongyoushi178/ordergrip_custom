@@ -132,7 +132,7 @@ export const NumStepper = ({
 export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
-        frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline,
+        frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp,
         shapeType, frontEndShape, rearEndShape,
         updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
         setAll, setMaterialDensity, activeCutId, setActiveCutId
@@ -142,9 +142,9 @@ export const Editor = () => {
 
     // Add physics dependencies
     const physics = useMemo(() => {
-        const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape);
+        const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape, outlineInterp);
         return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear);
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape]);
 
     // Mobile toggle removed for split view
     // const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -953,7 +953,8 @@ export const Editor = () => {
                                 length, maxDiameter, cuts,
                                 frontTaperLength, rearTaperLength,
                                 holeDepthFront, holeDepthRear,
-                                outline, frontEndShape, rearEndShape,
+                                outline, outlineInterp,
+                                frontEndShape, rearEndShape,
                                 materialDensity,
                             };
                             const result = await shareDxf(dxfInput);
