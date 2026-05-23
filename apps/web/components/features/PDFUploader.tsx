@@ -45,31 +45,40 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
     };
 
     // Password Protection State
+    type ProtectedFeature = 'ocr' | 'ai';
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
     const [passwordError, setPasswordError] = useState('');
     const [isLocked, setIsLocked] = useState(false);
+    const [pendingFeature, setPendingFeature] = useState<ProtectedFeature | null>(null);
 
     useEffect(() => {
-        // Check lock status on mount
+        // Check lock status on mount (localStorage キーは旧 AI 解析専用名のまま — 既存ユーザーの
+        // ロック状態を保持するため。実体としては OCR/AI 共通の認証ゲート)
         const locked = localStorage.getItem('gemini_ai_is_locked') === 'true';
         if (locked) setIsLocked(true);
     }, []);
 
-    const handleAiClick = () => {
+    /** 認証成功後、対象機能のファイル選択を起動 */
+    const triggerFeature = (feature: ProtectedFeature) => {
+        if (feature === 'ocr') fileInputRef.current?.click();
+        else aiFileInputRef.current?.click();
+    };
+
+    const handleProtectedClick = (feature: ProtectedFeature) => {
         if (isLocked) {
-            alert('パスワード入力を3回間違えたため、このブラウザではAI解析機能がロックされています。');
+            alert('パスワード入力を3回間違えたため、このブラウザではPDF読込機能がロックされています。');
             return;
         }
-
         if (isAuthenticated) {
-            aiFileInputRef.current?.click();
-        } else {
-            setShowPasswordModal(true);
-            setPasswordInput('');
-            setPasswordError('');
+            triggerFeature(feature);
+            return;
         }
+        setPendingFeature(feature);
+        setShowPasswordModal(true);
+        setPasswordInput('');
+        setPasswordError('');
     };
 
     const verifyPassword = () => {
@@ -77,7 +86,8 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
             setIsAuthenticated(true);
             setShowPasswordModal(false);
             localStorage.setItem('gemini_ai_lockout_count', '0'); // Reset count on success
-            aiFileInputRef.current?.click();
+            if (pendingFeature) triggerFeature(pendingFeature);
+            setPendingFeature(null);
         } else {
             const currentCount = parseInt(localStorage.getItem('gemini_ai_lockout_count') || '0');
             const newCount = currentCount + 1;
@@ -87,6 +97,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                 setIsLocked(true);
                 localStorage.setItem('gemini_ai_is_locked', 'true');
                 setShowPasswordModal(false);
+                setPendingFeature(null);
                 alert('パスワード入力を3回間違えたため、機能がロックされました。');
             } else {
                 setPasswordError(`パスワードが違います (残り${3 - newCount}回)`);
@@ -341,7 +352,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
         <div className="mb-4">
             <div className="flex gap-2">
                 <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => handleProtectedClick('ocr')}
                     disabled={isProcessing}
                     className={`flex-1 py-2 bg-zinc-200 dark:bg-zinc-700 text-xs font-bold rounded flex items-center justify-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80'}`}
                 >
@@ -349,7 +360,7 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                     OCR読込
                 </button>
                 <button
-                    onClick={handleAiClick}
+                    onClick={() => handleProtectedClick('ai')}
                     disabled={isProcessing}
                     className={`flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold rounded flex items-center justify-center gap-2 ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
                 >
@@ -371,10 +382,10 @@ export const PDFUploader = ({ onApply }: PDFUploaderProps) => {
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-2xl w-full max-w-sm border border-zinc-200 dark:border-zinc-800 animate-in zoom-in duration-200">
                         <h3 className="text-lg font-bold mb-4 text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                             <svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                            AI解析機能のロック解除
+                            PDF読込機能のロック解除
                         </h3>
                         <p className="text-sm text-zinc-500 mb-4">
-                            この機能を使用するにはパスワードが必要です。
+                            {pendingFeature === 'ocr' ? 'OCR読込' : 'AI図面解析'}を使用するにはパスワードが必要です。
                         </p>
 
                         <div className="space-y-4">
