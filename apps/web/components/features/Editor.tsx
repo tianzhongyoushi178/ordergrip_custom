@@ -9,6 +9,7 @@ import { shareBarrelToX } from '@/lib/storage/share-x';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
 import { CutSelector, type CutParams } from './CutSelector';
+import { OutlineEditor } from './OutlineEditor';
 
 /** 数値入力: フォーカス中はローカルstate、blur/Enterで確定 */
 const NumInput = ({ value, onChange, className, ...rest }: {
@@ -43,7 +44,7 @@ const NumInput = ({ value, onChange, className, ...rest }: {
 };
 
 /** +/- ボタン付き数値入力 */
-const NumStepper = ({
+export const NumStepper = ({
     value,
     onChange,
     step = 0.1,
@@ -409,7 +410,7 @@ export const Editor = () => {
 
                     <div>
                         <label className="text-sm font-medium mb-2 block">基本形状</label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                             <button
                                 onClick={() => updateShapeType('torpedo')}
                                 className={`
@@ -434,9 +435,28 @@ export const Editor = () => {
                                 <div className="text-sm">ストレート</div>
                                 <div className="text-[10px] font-normal opacity-60">直線的なアウトライン</div>
                             </button>
+                            <button
+                                onClick={() => updateShapeType('custom')}
+                                className={`
+                                    py-3 rounded-lg border-2 font-bold transition-all
+                                    ${shapeType === 'custom'
+                                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
+                                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'}
+                                `}
+                            >
+                                <div className="text-sm">カスタム</div>
+                                <div className="text-[10px] font-normal opacity-60">くぼみ・流曲線</div>
+                            </button>
                         </div>
                     </div>
 
+                    {shapeType === 'custom' && (
+                        <div className="rounded-lg border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-900/10 p-3">
+                            <OutlineEditor />
+                        </div>
+                    )}
+
+                    {shapeType !== 'custom' && (
                     <details className="group">
                         <summary className="text-xs font-medium text-zinc-500 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors list-none flex items-center gap-1">
                             <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
@@ -529,6 +549,7 @@ export const Editor = () => {
                             </div>
                         </div>
                     </details>
+                    )}
 
                     {/* Hole Depths */}
                     <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">

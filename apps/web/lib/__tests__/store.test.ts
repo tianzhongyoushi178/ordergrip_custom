@@ -52,9 +52,10 @@ describe('useBarrelStore', () => {
       expect(useBarrelStore.getState().maxDiameter).toBe(8.0);
     });
 
-    it('寸法変更でshapeTypeが"custom"になる', () => {
+    it('寸法変更ではshapeTypeを変えない (明示的なカスタムボタンでのみ切替)', () => {
+      useBarrelStore.setState({ shapeType: 'torpedo' });
       useBarrelStore.getState().updateDimension('length', 50);
-      expect(useBarrelStore.getState().shapeType).toBe('custom');
+      expect(useBarrelStore.getState().shapeType).toBe('torpedo');
     });
 
     it('holeDepthFrontを更新する', () => {
