@@ -42,6 +42,56 @@ const SVG_W = 400;
 const SVG_H = 140;
 const SVG_PAD = 12;
 
+/** プリセット定義 (z は length に対する比率 [0..1]、d は mm) */
+type PresetDef = {
+    key: string;
+    label: string;
+    points: { ratio: number; d: number }[];
+};
+const PRESETS: PresetDef[] = [
+    {
+        key: 'bullet',
+        label: '砲弾',
+        points: [
+            { ratio: 0,    d: 5.8 },
+            { ratio: 0.30, d: 7.0 },
+            { ratio: 1,    d: 5.8 },
+        ],
+    },
+    {
+        key: 'waist',
+        label: 'くびれ',
+        points: [
+            { ratio: 0,    d: 5.8 },
+            { ratio: 0.20, d: 7.0 },
+            { ratio: 0.50, d: 6.2 },
+            { ratio: 0.80, d: 7.0 },
+            { ratio: 1,    d: 5.8 },
+        ],
+    },
+    {
+        key: 'hourglass',
+        label: '鼓型',
+        points: [
+            { ratio: 0,    d: 7.0 },
+            { ratio: 0.25, d: 6.5 },
+            { ratio: 0.50, d: 5.6 },
+            { ratio: 0.75, d: 6.5 },
+            { ratio: 1,    d: 7.0 },
+        ],
+    },
+    {
+        key: 'egg',
+        label: '卵型',
+        points: [
+            { ratio: 0,    d: 5.8 },
+            { ratio: 0.40, d: 7.2 },
+            { ratio: 0.55, d: 7.2 },
+            { ratio: 1,    d: 5.8 },
+        ],
+    },
+];
+
 /**
  * アウトライン(バレル外形プロファイル)の制御点を編集する UI。
  * shapeType === 'custom' のとき Editor から表示される。
@@ -56,11 +106,34 @@ export const OutlineEditor = () => {
     const setOutline = useBarrelStore((s) => s.setOutline);
     const setOutlineInterp = useBarrelStore((s) => s.setOutlineInterp);
 
-    /** 制御点の更新。z で昇順ソート */
+    /** 前後対称ロック (ON のとき編集が中心 z=length/2 を境にミラーされる) */
+    const [symmetric, setSymmetric] = useState(false);
+
+    /** 対称鏡像化: 前半の編集を後半へ (および逆) ミラー反映した outline を返す */
+    const mirroredOutline = (next: OutlinePoint[]): OutlinePoint[] => {
+        const half = length / 2;
+        // 前半の点 (z <= half) を z>half にミラーした点を生成、d は前半側の値
+        const front = next.filter((p) => p.z <= half);
+        const mirroredBack = front
+            .filter((p) => p.z < half) // z = half の点は重複させない
+            .map((p) => ({ z: length - p.z, d: p.d }));
+        return [...front, ...mirroredBack].sort((a, b) => a.z - b.z);
+    };
+
+    /** 制御点の更新。z で昇順ソート。対称モード時は鏡像反映 */
     const updatePoint = (index: number, patch: Partial<OutlinePoint>) => {
-        const next = outline.map((p, i) => (i === index ? { ...p, ...patch } : p));
-        next.sort((a, b) => a.z - b.z);
-        setOutline(next);
+        const updated = outline.map((p, i) => (i === index ? { ...p, ...patch } : p));
+        updated.sort((a, b) => a.z - b.z);
+        setOutline(symmetric ? mirroredOutline(updated) : updated);
+    };
+
+    /** プリセット適用: ratio を現在の length に展開して outline を置き換え */
+    const applyPreset = (preset: PresetDef) => {
+        const pts: OutlinePoint[] = preset.points.map(({ ratio, d }) => ({
+            z: Math.round(ratio * length * 10) / 10,
+            d,
+        }));
+        setOutline(pts);
     };
 
     /** 隣接 2 点の中間に新規点を挿入(最大ギャップを分割) */
@@ -163,10 +236,16 @@ export const OutlineEditor = () => {
         e.currentTarget.releasePointerCapture(e.pointerId);
         dragIdxRef.current = null;
         setDragIdx(null);
-        // ドラッグ終了時にソートして z 昇順を回復
+        // ドラッグ終了時にソート + (必要なら) 対称反映
         const state = useBarrelStore.getState();
         const sorted = [...state.outline].sort((a, b) => a.z - b.z);
-        state.setOutline(sorted);
+        state.setOutline(symmetric ? mirroredOutline(sorted) : sorted);
+    };
+
+    /** 対称ロックトグル: ON に切り替えた瞬間に現在の outline を対称化 */
+    const toggleSymmetric = (on: boolean) => {
+        setSymmetric(on);
+        if (on) setOutline(mirroredOutline(outline));
     };
 
     return (
@@ -219,25 +298,57 @@ export const OutlineEditor = () => {
                     制御点をドラッグで編集 (前後端は z 固定・径のみ)
                 </div>
             </div>
-            {/* 補間方式トグル */}
+            {/* プリセット */}
             <div>
-                <label className="text-xs font-medium text-zinc-500 block mb-1.5">補間方式</label>
-                <div className="grid grid-cols-2 gap-2">
-                    {(['smooth', 'linear'] as OutlineInterp[]).map((mode) => (
+                <label className="text-xs font-medium text-zinc-500 block mb-1.5">プリセット</label>
+                <div className="grid grid-cols-4 gap-1.5">
+                    {PRESETS.map((p) => (
                         <button
-                            key={mode}
+                            key={p.key}
                             type="button"
-                            onClick={() => setOutlineInterp(mode)}
-                            className={`py-2 rounded-lg border-2 text-xs font-bold transition-all ${
-                                outlineInterp === mode
-                                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
-                                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-500'
-                            }`}
+                            onClick={() => applyPreset(p)}
+                            className="py-1.5 rounded text-xs font-bold border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
                         >
-                            {mode === 'smooth' ? '曲線 (流曲線)' : '直線 (折れ線)'}
+                            {p.label}
                         </button>
                     ))}
                 </div>
+            </div>
+
+            {/* 補間方式 & 対称ロック */}
+            <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+                <div>
+                    <label className="text-xs font-medium text-zinc-500 block mb-1.5">補間方式</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {(['smooth', 'linear'] as OutlineInterp[]).map((mode) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setOutlineInterp(mode)}
+                                className={`py-2 rounded-lg border-2 text-xs font-bold transition-all ${
+                                    outlineInterp === mode
+                                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
+                                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-500'
+                                }`}
+                            >
+                                {mode === 'smooth' ? '曲線' : '直線'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => toggleSymmetric(!symmetric)}
+                    className={`px-3 py-2 rounded-lg border-2 text-xs font-bold transition-all ${
+                        symmetric
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
+                            : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-500'
+                    }`}
+                    title="前後対称: 前半の編集を後半にミラーする"
+                    aria-pressed={symmetric}
+                >
+                    前後対称{symmetric ? ' ✓' : ''}
+                </button>
             </div>
 
             {/* 制御点リスト */}
