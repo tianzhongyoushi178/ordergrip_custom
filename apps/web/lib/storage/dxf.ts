@@ -97,6 +97,8 @@ interface DxfBarrelInput {
     frontEndShape: BarrelState['frontEndShape'];
     rearEndShape: BarrelState['rearEndShape'];
     materialDensity: number;
+    /** 断面形状: 0/未指定 = 真円, 5〜11 = 正多角形 (対角=最大径) */
+    polygonSides?: number;
 }
 
 const materialName = (density: number): string => {
@@ -204,6 +206,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     dxf.addLayer('CENTER', Colors.Red, 'Continuous');
     dxf.addLayer('DIM', Colors.Yellow, 'Continuous');
     dxf.addLayer('CUT_LABEL', Colors.Green, 'Continuous');
+    dxf.addLayer('SECTION', Colors.Magenta, 'Continuous');
 
     const baseR = input.maxDiameter / 2;
     const length = input.length;
@@ -555,6 +558,41 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     dxf.addText(point3d(length / 2 - 4, dimY - 3, 0), 2, `L=${length.toFixed(1)}mm`, { layerName: 'DIM' });
     dxf.addText(point3d(length / 2 - 6, baseR + 1.5, 0), 2, `DIA ${input.maxDiameter.toFixed(1)}mm`, { layerName: 'DIM' });
     dxf.addText(point3d(0, dimY - 6, 0), 2, materialName(input.materialDensity), { layerName: 'DIM' });
+
+    // ============================================================
+    // 9. 断面図 (正多角形のとき) — バレル前端の左側に最大径断面を作図
+    //    対角(頂点)=最大径で円に内接。穴は円形。
+    // ============================================================
+    if (input.polygonSides !== undefined && input.polygonSides >= 5) {
+        const N = input.polygonSides;
+        const R = baseR; // 円周半径 = 最大径/2
+        const cx = -(R + 14); // 前端 (z=0) のさらに左に配置
+        const cy = 0;
+        const vertexOffset = Math.PI / 2; // 頂点を上に向ける
+
+        const polyPts = [];
+        for (let k = 0; k < N; k++) {
+            const ang = vertexOffset + (k / N) * Math.PI * 2;
+            polyPts.push({ point: point2d(cx + R * Math.cos(ang), cy + R * Math.sin(ang)) });
+        }
+        dxf.addLWPolyline(polyPts, { layerName: 'SECTION', flags: LWPolylineFlags.Closed });
+
+        // 穴 (円形) を多角ポリラインで近似
+        const HOLE_SEG = 24;
+        const holePts = [];
+        for (let k = 0; k < HOLE_SEG; k++) {
+            const ang = (k / HOLE_SEG) * Math.PI * 2;
+            holePts.push({ point: point2d(cx + HOLE_RADIUS * Math.cos(ang), cy + HOLE_RADIUS * Math.sin(ang)) });
+        }
+        dxf.addLWPolyline(holePts, { layerName: 'HOLES', flags: LWPolylineFlags.Closed });
+
+        dxf.addText(
+            point3d(cx - R, cy - R - 3, 0),
+            1.8,
+            `SECTION ${N}-gon (across-corners ${input.maxDiameter.toFixed(1)}mm)`,
+            { layerName: 'SECTION' },
+        );
+    }
 
     return dxf.stringify();
 };

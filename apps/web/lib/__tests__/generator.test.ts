@@ -262,25 +262,25 @@ describe('generateProfile', () => {
       expect(withoutCut[midIdx].x - withCut[midIdx].x).toBeCloseTo(0.5, 1);
     });
 
-    it('stepカット: 3段階の深さ', () => {
+    it('stepカット: 3段階の深さ（前→後で land→mid→deep）', () => {
       const cuts = [baseCut('step', { properties: { pitch: 10.0, depth: 0.5 } })];
       const withCut = generateProfile(45, 7.0, cuts, 10, 10);
       const withoutCut = generateProfile(45, 7.0, [], 10, 10);
 
-      // factor=0.2 (z=17) → full depth
-      const deepIdx = withCut.findIndex(p => Math.abs(p.y - 17.0) < 0.15);
-      expect(deepIdx).toBeGreaterThanOrEqual(0);
-      expect(withoutCut[deepIdx].x - withCut[deepIdx].x).toBeCloseTo(0.5, 1);
+      // factor=0.2 (z=17) → land（削りなし）
+      const landIdx = withCut.findIndex(p => Math.abs(p.y - 17.0) < 0.15);
+      expect(landIdx).toBeGreaterThanOrEqual(0);
+      expect(withoutCut[landIdx].x - withCut[landIdx].x).toBeCloseTo(0, 1);
 
-      // factor=0.5 (z=20) → half depth
+      // factor=0.5 (z=20) → mid step = depth*0.5
       const midIdx = withCut.findIndex(p => Math.abs(p.y - 20.0) < 0.15);
       expect(midIdx).toBeGreaterThanOrEqual(0);
       expect(withoutCut[midIdx].x - withCut[midIdx].x).toBeCloseTo(0.25, 1);
 
-      // factor=0.8 (z=23) → no depth (land)
-      const landIdx = withCut.findIndex(p => Math.abs(p.y - 23.0) < 0.15);
-      expect(landIdx).toBeGreaterThanOrEqual(0);
-      expect(withoutCut[landIdx].x - withCut[landIdx].x).toBeCloseTo(0, 1);
+      // factor=0.8 (z=23) → deep = full depth
+      const deepIdx = withCut.findIndex(p => Math.abs(p.y - 23.0) < 0.15);
+      expect(deepIdx).toBeGreaterThanOrEqual(0);
+      expect(withoutCut[deepIdx].x - withCut[deepIdx].x).toBeCloseTo(0.5, 1);
     });
 
     it('wingカット: 曲線テーパーで始点が最も深い', () => {
@@ -302,20 +302,20 @@ describe('generateProfile', () => {
       expect(withoutCut[endIdx].x - withCut[endIdx].x).toBeLessThan(0.1);
     });
 
-    it('stairカット: ランプ遷移付き2段', () => {
+    it('stairカット: 対称ランプ（ramp down→deep→ramp up→land）', () => {
       const cuts = [baseCut('stair', { properties: { pitch: 10.0, depth: 0.5 } })];
       const withCut = generateProfile(45, 7.0, cuts, 10, 10);
       const withoutCut = generateProfile(45, 7.0, [], 10, 10);
 
-      // factor=0.3 (z=18) → step1 flat = depth*0.5 = 0.25
-      const step1Idx = withCut.findIndex(p => Math.abs(p.y - 18.0) < 0.15);
-      expect(step1Idx).toBeGreaterThanOrEqual(0);
-      expect(withoutCut[step1Idx].x - withCut[step1Idx].x).toBeCloseTo(0.25, 1);
+      // factor=0.3 (z=18) → deep flat = full depth
+      const deepIdx = withCut.findIndex(p => Math.abs(p.y - 18.0) < 0.15);
+      expect(deepIdx).toBeGreaterThanOrEqual(0);
+      expect(withoutCut[deepIdx].x - withCut[deepIdx].x).toBeCloseTo(0.5, 1);
 
-      // factor=0.8 (z=23) → step2 flat = depth = 0.5
-      const step2Idx = withCut.findIndex(p => Math.abs(p.y - 23.0) < 0.15);
-      expect(step2Idx).toBeGreaterThanOrEqual(0);
-      expect(withoutCut[step2Idx].x - withCut[step2Idx].x).toBeCloseTo(0.5, 1);
+      // factor=0.8 (z=23) → land（削りなし）
+      const landIdx = withCut.findIndex(p => Math.abs(p.y - 23.0) < 0.15);
+      expect(landIdx).toBeGreaterThanOrEqual(0);
+      expect(withoutCut[landIdx].x - withCut[landIdx].x).toBeCloseTo(0, 1);
     });
   });
 

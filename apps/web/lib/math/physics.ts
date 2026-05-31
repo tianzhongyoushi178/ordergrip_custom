@@ -9,7 +9,12 @@ export interface PhysicsData {
     centerOfGravity: number; // mm from front (z=0)
 }
 
-export const calculatePhysics = (points: THREE.Vector2[], density: number, holeDepthFront: number = 0, holeDepthRear: number = 0): PhysicsData => {
+/**
+ * @param crossSectionAreaFactor 断面積の補正係数。真円=1、正多角形は < 1
+ *   (頂点=半径の正 N 角形なら N·sin(2π/N)/(2π))。本体(中実部)の体積・モーメントに
+ *   一様に掛かる。穴は円形のまま (係数は掛けない)。
+ */
+export const calculatePhysics = (points: THREE.Vector2[], density: number, holeDepthFront: number = 0, holeDepthRear: number = 0, crossSectionAreaFactor: number = 1): PhysicsData => {
     let volume = 0;
     let momentZ = 0;
 
@@ -28,9 +33,9 @@ export const calculatePhysics = (points: THREE.Vector2[], density: number, holeD
         const h = z2 - z1;
         if (h <= 0.000001) continue;
 
-        // Conical frustum volume
+        // Conical frustum volume (× 断面積係数で多角形断面に対応。z 方向重心は不変)
         // V = (pi * h / 3) * (r1^2 + r1*r2 + r2^2)
-        const dv = (Math.PI * h / 3) * (r1 * r1 + r1 * r2 + r2 * r2);
+        const dv = (Math.PI * h / 3) * (r1 * r1 + r1 * r2 + r2 * r2) * crossSectionAreaFactor;
 
         // Centroid of frustum (z-coordinate)
         // Formula for centroid of conical frustum relative to base (z1)

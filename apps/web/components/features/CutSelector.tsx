@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CutType } from '@/lib/store/useBarrelStore';
 
 /** カット追加前に編集可能なパラメータ。指定しなかった項目は Editor 側でデフォルト適用 */
@@ -319,16 +319,15 @@ const ParamInput = ({ label, suffix, value, onChange, step = 0.1, min = 0, integ
 export const CutSelector = ({ onSelect }: CutSelectorProps) => {
     const [selectedId, setSelectedId] = useState<CutType | null>(null);
     const [params, setParams] = useState<CutParams>({});
+    const [prevSelectedId, setPrevSelectedId] = useState<CutType | null>(null);
     const selectedCut = CUT_DATA.find(c => c.id === selectedId) ?? null;
 
-    // カット種別変更時に該当デフォルトでパラメータをリセット
-    useEffect(() => {
-        if (selectedId) {
-            setParams({ ...PARAM_DEFAULTS[selectedId] });
-        } else {
-            setParams({});
-        }
-    }, [selectedId]);
+    // カット種別変更時に該当デフォルトでパラメータをリセット。effect 内 setState の
+    // カスケード描画を避けるため、レンダー中に前回値と比較して同期する。
+    if (selectedId !== prevSelectedId) {
+        setPrevSelectedId(selectedId);
+        setParams(selectedId ? { ...PARAM_DEFAULTS[selectedId] } : {});
+    }
 
     const showGapWidth = selectedId === 'ring_double' || selectedId === 'ring_triple';
     const showItemCount = selectedId === 'vertical';

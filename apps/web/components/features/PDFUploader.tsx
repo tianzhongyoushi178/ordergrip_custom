@@ -15,7 +15,7 @@ export interface ExtractedSpecs {
         type: string;
         startZ: number;
         endZ: number;
-        properties?: any;
+        properties?: Record<string, number>;
     }[];
 }
 

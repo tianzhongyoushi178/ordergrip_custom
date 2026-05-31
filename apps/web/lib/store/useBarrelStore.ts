@@ -49,6 +49,9 @@ export interface BarrelState {
   outline: OutlinePoint[];
   outlineInterp: OutlineInterp; // 制御点間の補間方式
 
+  // 断面形状: 0 = 真円, 5〜11 = 正多角形 (対角=最大径で円に内接)
+  polygonSides: number;
+
   // Material
   materialDensity: number; // g/cm3
 
@@ -69,6 +72,7 @@ export interface BarrelState {
   setMaterialDensity: (density: number) => void;
   setOutline: (outline: OutlinePoint[]) => void;
   setOutlineInterp: (interp: OutlineInterp) => void;
+  setPolygonSides: (sides: number) => void;
   setAll: (state: Partial<BarrelState>) => void;
 
   // Camera Control
@@ -112,6 +116,7 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   rearEndShape: 'taper',
   outline: [],
   outlineInterp: 'smooth',
+  polygonSides: 0,
   cuts: [],
 
   // 寸法変更は taper ベースの形状を維持。明示的な「カスタム」ボタン押下でのみ outline モードに移行。
@@ -151,6 +156,10 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   setMaterialDensity: (density) => set({ materialDensity: density }),
   setOutline: (outline) => set({ outline }),
   setOutlineInterp: (interp) => set({ outlineInterp: interp }),
+  // 0 = 真円, それ以外は 5〜11 にクランプ
+  setPolygonSides: (sides) => set({
+    polygonSides: sides <= 0 ? 0 : Math.min(11, Math.max(5, Math.round(sides))),
+  }),
   setAll: (newState) => set((state) => ({ ...state, ...newState })),
 
   cameraResetTrigger: 0,

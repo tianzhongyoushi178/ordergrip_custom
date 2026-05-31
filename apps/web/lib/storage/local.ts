@@ -16,6 +16,7 @@ export const saveToLocalStorage = (state: Partial<BarrelState>) => {
         shapeType: state.shapeType,
         frontEndShape: state.frontEndShape,
         rearEndShape: state.rearEndShape,
+        polygonSides: state.polygonSides,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
@@ -52,6 +53,12 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
 
     if (typeof raw.shapeType === 'string' && ['torpedo', 'straight', 'custom'].includes(raw.shapeType)) {
         result.shapeType = raw.shapeType as BarrelState['shapeType'];
+    }
+
+    // 断面形状: 0 = 真円, 5〜11 = 正多角形。範囲外は無視 (デフォルト維持)。
+    if (isFiniteNumber(raw.polygonSides)) {
+        const sides = Math.round(raw.polygonSides);
+        if (sides === 0 || (sides >= 5 && sides <= 11)) result.polygonSides = sides;
     }
     if (typeof raw.frontEndShape === 'string' && ['taper', 'round', 'convex'].includes(raw.frontEndShape)) {
         result.frontEndShape = raw.frontEndShape as BarrelState['frontEndShape'];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
@@ -19,14 +19,16 @@ const TUNGSTEN_OPTIONS: Array<{ pct: number; density: number }> = [
 
 export function SpecWizard({ onComplete, onCancel }: SpecWizardProps) {
     const [step, setStep] = useState(1);
-    const [hasMounted, setHasMounted] = useState(false);
     const setAll = useBarrelStore((state) => state.setAll);
 
-    useEffect(() => {
-        setHasMounted(true);
-        // The portal overlay covers the viewport; the page itself does not scroll
-        // because <main> uses overflow-hidden, so we don't need to lock body here.
-    }, []);
+    // createPortal は document を要するため、SSR/初回ハイドレーション時は null を
+    // 返してハイドレーション不一致を防ぐ。サーバー snapshot=false / クライアント=true。
+    // (useState+useEffect の set-state-in-effect を避けるため useSyncExternalStore を使用)
+    const hasMounted = useSyncExternalStore(
+        () => () => {},
+        () => true,
+        () => false,
+    );
 
     // Form State
     const [specs, setSpecs] = useState({

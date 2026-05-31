@@ -1,7 +1,7 @@
 'use client';
 
 import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
-import { generateProfile } from '@/lib/math/generator';
+import { generateProfile, polygonAreaFactor } from '@/lib/math/generator';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
@@ -133,9 +133,9 @@ export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
         frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp,
-        shapeType, frontEndShape, rearEndShape,
+        shapeType, frontEndShape, rearEndShape, polygonSides,
         updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
-        setAll, setMaterialDensity, activeCutId, setActiveCutId
+        setAll, setMaterialDensity, setPolygonSides, activeCutId, setActiveCutId
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
@@ -143,8 +143,8 @@ export const Editor = () => {
     // Add physics dependencies
     const physics = useMemo(() => {
         const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape, outlineInterp);
-        return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear);
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape]);
+        return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, polygonAreaFactor(polygonSides));
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonSides]);
 
     // Mobile toggle removed for split view
     // const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -447,6 +447,30 @@ export const Editor = () => {
                                 <div className="text-sm">カスタム</div>
                                 <div className="text-[10px] font-normal opacity-60">くぼみ・流曲線</div>
                             </button>
+                        </div>
+                    </div>
+
+                    {/* 断面形状 (真円 / 正多角形 5〜11角) — 対角=最大径で円に内接 */}
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-medium">断面形状</label>
+                            <span className="text-[10px] text-zinc-400">対角＝最大径</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {[0, 5, 6, 7, 8, 9, 10, 11].map((sides) => (
+                                <button
+                                    key={sides}
+                                    type="button"
+                                    onClick={() => setPolygonSides(sides)}
+                                    className={`py-2 rounded-lg border-2 text-xs font-bold transition-all ${
+                                        polygonSides === sides
+                                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                                            : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-600 dark:text-zinc-300'
+                                    }`}
+                                >
+                                    {sides === 0 ? '円' : `${sides}角`}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -955,7 +979,7 @@ export const Editor = () => {
                                 holeDepthFront, holeDepthRear,
                                 outline, outlineInterp,
                                 frontEndShape, rearEndShape,
-                                materialDensity,
+                                materialDensity, polygonSides,
                             };
                             const result = await shareDxf(dxfInput);
                             if (result.status === 'failed') {

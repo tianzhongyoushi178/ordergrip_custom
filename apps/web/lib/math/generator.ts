@@ -290,6 +290,28 @@ export const generateProfile = (
     return points;
 };
 
+/**
+ * 正多角形の半径係数。円周半径(頂点までの距離)を 1 としたとき、角度 theta
+ * における多角形境界までの距離の比率を返す。頂点方向で 1、辺の中央で cos(π/N)。
+ * 頂点は theta = k·(2π/N) (k 整数) に位置する。sides < 5 は真円とみなし 1 を返す。
+ */
+export const polygonRadiusFactor = (theta: number, sides: number): number => {
+    if (sides < 5) return 1;
+    const seg = (Math.PI * 2) / sides;
+    let local = theta % seg;
+    if (local < 0) local += seg;
+    return Math.cos(Math.PI / sides) / Math.cos(local - Math.PI / sides);
+};
+
+/**
+ * 正 N 角形(円周半径 R)の断面積 ÷ 同半径の円の断面積 = N·sin(2π/N) / (2π)。
+ * 物理計算で多角形断面の体積をスケールするのに使う。sides < 5 は 1 を返す。
+ */
+export const polygonAreaFactor = (sides: number): number => {
+    if (sides < 5) return 1;
+    return (sides * Math.sin((Math.PI * 2) / sides)) / (Math.PI * 2);
+};
+
 export const generateBarrelGeometry = (
     length: number,
     maxDiameter: number,
@@ -302,6 +324,7 @@ export const generateBarrelGeometry = (
     frontEndShape: EndShape = 'taper',
     rearEndShape: EndShape = 'taper',
     outlineInterp: OutlineInterp = 'smooth',
+    polygonSides: number = 0,
 ): THREE.BufferGeometry => {
     // 1. Get Base Profile (Outer surface only)
     const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
@@ -362,12 +385,11 @@ export const generateBarrelGeometry = (
     // the groove and edgeFade zeros its depth, making the cut vanish. Counts
     // that don't divide segments evenly also alias. Scale segments so each
     // groove gets MIN_VERTS_PER_GROOVE samples and align with the densest count.
-    let radialSegments = 64;
+    let required = 64;
+    let maxVCount = 0;
     if (verticalCuts.length > 0) {
         const MIN_VERTS_PER_GROOVE = 6;
         const MIN_GROOVE_FRACTION = 0.05;
-        let required = radialSegments;
-        let maxCount = 0;
         for (const vCut of verticalCuts) {
             const count = vCut.properties.itemCount || 12;
             const grooveFraction = Math.max(
@@ -376,11 +398,45 @@ export const generateBarrelGeometry = (
             );
             const needed = Math.ceil((count * MIN_VERTS_PER_GROOVE) / grooveFraction);
             if (needed > required) required = needed;
-            if (count > maxCount) maxCount = count;
+            if (count > maxVCount) maxVCount = count;
         }
-        if (maxCount > 0) required = Math.ceil(required / maxCount) * maxCount;
-        radialSegments = Math.min(required, 1024);
     }
+
+    // 周方向のサンプル列を構築する。各列は { theta, u, bridgeNext } を持ち、
+    // bridgeNext=false の列は次列との間に面(quad)を張らない = ジオメトリの切れ目。
+    //
+    // 真円: 0→2π を radialSegments 分割した一様リング(末尾だけ非ブリッジ)。
+    // 多角形: 各面ごとに頂点を分離生成し、面境界(多角形の角)を非ブリッジにする。
+    //   → computeVertexNormals が角をまたいで法線を平均しないため、面はフラット・
+    //     角はシャープに描画される(穴・テーパー方向は滑らかなまま)。
+    const ring: { theta: number; u: number; bridgeNext: boolean }[] = [];
+    const isPolygon = polygonSides >= 5;
+    if (isPolygon) {
+        const N = polygonSides;
+        const seg = (Math.PI * 2) / N;
+        // 穴(円形)を滑らかに見せるため最低 ~48 列を確保。縦溝があれば解像度を上げる。
+        let perFace = Math.max(6, Math.ceil(48 / N));
+        if (required > 64) perFace = Math.max(perFace, Math.ceil(required / N));
+        perFace = Math.min(perFace, Math.floor(1024 / N));
+        for (let f = 0; f < N; f++) {
+            for (let c = 0; c <= perFace; c++) {
+                const theta = (f + c / perFace) * seg;
+                ring.push({ theta, u: theta / (Math.PI * 2), bridgeNext: c < perFace });
+            }
+        }
+    } else {
+        let radialSegments = required;
+        if (maxVCount > 0) radialSegments = Math.ceil(radialSegments / maxVCount) * maxVCount;
+        radialSegments = Math.min(radialSegments, 1024);
+        for (let j = 0; j <= radialSegments; j++) {
+            ring.push({
+                theta: (j / radialSegments) * Math.PI * 2,
+                u: j / radialSegments,
+                bridgeNext: j < radialSegments,
+            });
+        }
+    }
+    const cols = ring.length;
     const heightSegments = points.length - 1;
 
     const vertices: number[] = [];
@@ -421,9 +477,13 @@ export const generateBarrelGeometry = (
             isOuterSurface = true;
         }
 
-        for (let j = 0; j <= radialSegments; j++) {
-            const u = j / radialSegments;
-            const theta = u * Math.PI * 2;
+        for (let jc = 0; jc < cols; jc++) {
+            const { theta, u } = ring[jc];
+
+            // 外周面のみ多角形化(穴・端面は円のまま)。rBase を多角形の円周半径とみなす。
+            const rSurf = isOuterSurface && isPolygon
+                ? rBase * polygonRadiusFactor(theta, polygonSides)
+                : rBase;
 
             let rMod = 0;
 
@@ -487,7 +547,7 @@ export const generateBarrelGeometry = (
                 // Let's just oscillate.
             }
 
-            const rFinal = Math.max(0.1, rBase - rMod);
+            const rFinal = Math.max(0.1, rSurf - rMod);
 
             const sin = Math.sin(theta);
             const cos = Math.cos(theta);
@@ -508,11 +568,12 @@ export const generateBarrelGeometry = (
 
     // Generate Indices
     for (let i = 0; i < heightSegments; i++) {
-        for (let j = 0; j < radialSegments; j++) {
-            const a = i * (radialSegments + 1) + j;
-            const b = i * (radialSegments + 1) + j + 1;
-            const c = (i + 1) * (radialSegments + 1) + j;
-            const d = (i + 1) * (radialSegments + 1) + j + 1;
+        for (let jc = 0; jc < cols; jc++) {
+            if (!ring[jc].bridgeNext) continue; // 面境界(多角形の角)・継ぎ目は跨がない
+            const a = i * cols + jc;
+            const b = i * cols + jc + 1;
+            const c = (i + 1) * cols + jc;
+            const d = (i + 1) * cols + jc + 1;
 
             // CCW Winding
             indices.push(a, d, b);

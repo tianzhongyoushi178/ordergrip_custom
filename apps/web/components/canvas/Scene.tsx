@@ -4,12 +4,12 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { Barrel } from './Barrel';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, type ComponentRef } from 'react';
 
 export const Scene = () => {
     const { length, cameraResetTrigger } = useBarrelStore();
     const [isMobile, setIsMobile] = useState(false);
-    const controlsRef = useRef<any>(null);
+    const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
