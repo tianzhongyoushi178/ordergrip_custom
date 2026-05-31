@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useBarrelStore, OutlinePoint, OutlineInterp } from '@/lib/store/useBarrelStore';
 import { NumStepper } from './Editor';
 
-const MIN_DIAMETER = 4.0;
+const MIN_DIAMETER = 5.6;
 const MAX_DIAMETER = 10.0;
 
 /** d(z) を Catmull-Rom (cubic Hermite) で補間。SVG プレビュー描画用 */
