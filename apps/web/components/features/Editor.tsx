@@ -1,7 +1,7 @@
 'use client';
 
 import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
-import { generateProfile, polygonAreaFactor } from '@/lib/math/generator';
+import { generateProfile, polygonAreaFactor, polygonSidesAt } from '@/lib/math/generator';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
@@ -133,9 +133,9 @@ export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
         frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp,
-        shapeType, frontEndShape, rearEndShape, polygonSides,
+        shapeType, frontEndShape, rearEndShape, polygonZones,
         updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
-        setAll, setMaterialDensity, setPolygonSides, activeCutId, setActiveCutId
+        setAll, setMaterialDensity, addPolygonZone, updatePolygonZone, removePolygonZone, activeCutId, setActiveCutId
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
@@ -143,8 +143,8 @@ export const Editor = () => {
     // Add physics dependencies
     const physics = useMemo(() => {
         const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape, outlineInterp);
-        return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, polygonAreaFactor(polygonSides));
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonSides]);
+        return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, (z) => polygonAreaFactor(polygonSidesAt(polygonZones, z)));
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones]);
 
     // Mobile toggle removed for split view
     // const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -450,27 +450,103 @@ export const Editor = () => {
                         </div>
                     </div>
 
-                    {/* 断面形状 (真円 / 正多角形 5〜11角) — 対角=最大径で円に内接 */}
+                    {/* 多角形ゾーン: 指定区間の断面を正多角形に (対角=最大径で円に内接) */}
                     <div>
                         <div className="flex justify-between items-center mb-2">
-                            <label className="text-sm font-medium">断面形状</label>
+                            <label className="text-sm font-medium">多角形ゾーン</label>
                             <span className="text-[10px] text-zinc-400">対角＝最大径</span>
                         </div>
-                        <div className="grid grid-cols-4 gap-1.5">
-                            {[0, 5, 6, 7, 8, 9, 10, 11].map((sides) => (
-                                <button
-                                    key={sides}
-                                    type="button"
-                                    onClick={() => setPolygonSides(sides)}
-                                    className={`py-2 rounded-lg border-2 text-xs font-bold transition-all ${
-                                        polygonSides === sides
-                                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600'
-                                            : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-600 dark:text-zinc-300'
-                                    }`}
-                                >
-                                    {sides === 0 ? '円' : `${sides}角`}
-                                </button>
+
+                        {polygonZones.length === 0 && (
+                            <p className="text-[11px] text-zinc-400 mb-2">
+                                未設定（断面は真円）。区間を追加すると、その範囲だけ多角形になります。
+                            </p>
+                        )}
+
+                        <div className="space-y-2">
+                            {polygonZones.map((zone) => (
+                                <div key={zone.id} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-2 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="grid grid-cols-7 gap-1 flex-1">
+                                            {[5, 6, 7, 8, 9, 10, 11].map((s) => (
+                                                <button
+                                                    key={s}
+                                                    type="button"
+                                                    onClick={() => updatePolygonZone(zone.id, { sides: s })}
+                                                    className={`py-1 rounded border text-[11px] font-bold transition-all ${
+                                                        zone.sides === s
+                                                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                                                            : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 text-zinc-500'
+                                                    }`}
+                                                >
+                                                    {s}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removePolygonZone(zone.id)}
+                                            className="w-7 h-7 rounded text-zinc-400 hover:text-red-500 flex items-center justify-center shrink-0"
+                                            aria-label="多角形ゾーンを削除"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="text-[10px] text-zinc-400 block">
+                                            開始 z (mm)
+                                            <NumStepper
+                                                value={zone.startZ}
+                                                onChange={(v) => updatePolygonZone(zone.id, { startZ: v })}
+                                                step={0.5}
+                                                min={0}
+                                                max={length}
+                                                inputClassName="text-xs"
+                                            />
+                                        </label>
+                                        <label className="text-[10px] text-zinc-400 block">
+                                            終了 z (mm)
+                                            <NumStepper
+                                                value={zone.endZ}
+                                                onChange={(v) => updatePolygonZone(zone.id, { endZ: v })}
+                                                step={0.5}
+                                                min={0}
+                                                max={length}
+                                                inputClassName="text-xs"
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
                             ))}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                            <button
+                                type="button"
+                                onClick={() => addPolygonZone({
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    startZ: Math.round((length / 3) * 10) / 10,
+                                    endZ: Math.round((length * 2 / 3) * 10) / 10,
+                                    sides: 6,
+                                })}
+                                className="py-2 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-bold text-zinc-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+                            >
+                                ＋ 区間を追加
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => addPolygonZone({
+                                    id: Math.random().toString(36).substr(2, 9),
+                                    startZ: 0,
+                                    endZ: length,
+                                    sides: 6,
+                                })}
+                                className="py-2 rounded-lg border-2 border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+                            >
+                                全体を多角形
+                            </button>
                         </div>
                     </div>
 
@@ -979,7 +1055,7 @@ export const Editor = () => {
                                 holeDepthFront, holeDepthRear,
                                 outline, outlineInterp,
                                 frontEndShape, rearEndShape,
-                                materialDensity, polygonSides,
+                                materialDensity, polygonZones,
                             };
                             const result = await shareDxf(dxfInput);
                             if (result.status === 'failed') {

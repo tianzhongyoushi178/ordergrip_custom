@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateProfile, generateBarrelGeometry } from '../math/generator';
-import type { CutZone } from '../store/useBarrelStore';
+import { generateProfile, generateBarrelGeometry, polygonSidesAt } from '../math/generator';
+import type { CutZone, PolygonZone } from '../store/useBarrelStore';
 
 describe('generateProfile', () => {
   // =========================================
@@ -399,5 +399,59 @@ describe('generateBarrelGeometry', () => {
   it('穴深さ0でもジオメトリが生成される', () => {
     const geom = generateBarrelGeometry(45, 7.0, [], 10, 10, 0, 0);
     expect(geom.getAttribute('position').count).toBeGreaterThan(0);
+  });
+
+  it('多角形ゾーン: 区間内はシルエットが多角形(半径が角度で変動)、区間外は円', () => {
+    const zones: PolygonZone[] = [{ id: 'z1', startZ: 18, endZ: 27, sides: 6 }];
+    const geom = generateBarrelGeometry(45, 7.0, [], 10, 10, 8, 8, [], 'taper', 'taper', 'smooth', zones);
+    const pos = geom.getAttribute('position');
+
+    // 指定バレル Z 位置の外周面頂点の半径を集める (vertex.y = -Z、半径 = √(x²+z²))。
+    // 穴(2.1)・中心軸は除外するため r > 2.5 でフィルタ。
+    const radiiAt = (bz: number): number[] => {
+      const out: number[] = [];
+      for (let i = 0; i < pos.count; i++) {
+        if (Math.abs(-pos.getY(i) - bz) < 0.1) {
+          const r = Math.hypot(pos.getX(i), pos.getZ(i));
+          if (r > 2.5) out.push(r);
+        }
+      }
+      return out;
+    };
+
+    // 区間内(z=22.5): 6角形 → 半径は頂点(=3.5)と辺中央(≈3.03)で変動
+    const inZone = radiiAt(22.5);
+    expect(inZone.length).toBeGreaterThan(0);
+    expect(Math.max(...inZone) - Math.min(...inZone)).toBeGreaterThan(0.2);
+    expect(Math.max(...inZone)).toBeCloseTo(3.5, 1);
+
+    // 区間外(z=14, 最大径域だがゾーン外): ほぼ真円 → 半径一定
+    const outZone = radiiAt(14);
+    expect(outZone.length).toBeGreaterThan(0);
+    expect(Math.max(...outZone) - Math.min(...outZone)).toBeLessThan(0.05);
+  });
+});
+
+describe('polygonSidesAt', () => {
+  const zones: PolygonZone[] = [
+    { id: 'a', startZ: 10, endZ: 20, sides: 6 },
+    { id: 'b', startZ: 30, endZ: 40, sides: 8 },
+  ];
+  it('区間内はその角数を返す', () => {
+    expect(polygonSidesAt(zones, 15)).toBe(6);
+    expect(polygonSidesAt(zones, 35)).toBe(8);
+  });
+  it('区間外は0(円)を返す', () => {
+    expect(polygonSidesAt(zones, 5)).toBe(0);
+    expect(polygonSidesAt(zones, 25)).toBe(0);
+    expect(polygonSidesAt(zones, 45)).toBe(0);
+  });
+  it('境界は開始を含み・終了を含まない', () => {
+    expect(polygonSidesAt(zones, 10)).toBe(6);
+    expect(polygonSidesAt(zones, 20)).toBe(0);
+  });
+  it('空配列・sides<5 は常に0', () => {
+    expect(polygonSidesAt([], 15)).toBe(0);
+    expect(polygonSidesAt([{ id: 'x', startZ: 0, endZ: 50, sides: 3 }], 25)).toBe(0);
   });
 });

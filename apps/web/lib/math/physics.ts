@@ -10,11 +10,11 @@ export interface PhysicsData {
 }
 
 /**
- * @param crossSectionAreaFactor 断面積の補正係数。真円=1、正多角形は < 1
- *   (頂点=半径の正 N 角形なら N·sin(2π/N)/(2π))。本体(中実部)の体積・モーメントに
- *   一様に掛かる。穴は円形のまま (係数は掛けない)。
+ * @param areaFactorAt フラスタム中点の Z 位置(mm)を受け取り、断面積の補正係数を返す。
+ *   真円=1、正多角形は < 1 (頂点=半径の正 N 角形なら N·sin(2π/N)/(2π))。区間ごとに
+ *   多角形/円を切り替えられるよう関数で受ける。本体(中実部)のみに掛かる(穴は円形)。
  */
-export const calculatePhysics = (points: THREE.Vector2[], density: number, holeDepthFront: number = 0, holeDepthRear: number = 0, crossSectionAreaFactor: number = 1): PhysicsData => {
+export const calculatePhysics = (points: THREE.Vector2[], density: number, holeDepthFront: number = 0, holeDepthRear: number = 0, areaFactorAt: (zMid: number) => number = () => 1): PhysicsData => {
     let volume = 0;
     let momentZ = 0;
 
@@ -35,7 +35,9 @@ export const calculatePhysics = (points: THREE.Vector2[], density: number, holeD
 
         // Conical frustum volume (× 断面積係数で多角形断面に対応。z 方向重心は不変)
         // V = (pi * h / 3) * (r1^2 + r1*r2 + r2^2)
-        const dv = (Math.PI * h / 3) * (r1 * r1 + r1 * r2 + r2 * r2) * crossSectionAreaFactor;
+        // 区間判定はゾーン境界(mm)で行うため、中点 z は mm 値(p1.y/p2.y)で渡す。
+        const zMidMm = (p1.y + p2.y) / 2;
+        const dv = (Math.PI * h / 3) * (r1 * r1 + r1 * r2 + r2 * r2) * areaFactorAt(zMidMm);
 
         // Centroid of frustum (z-coordinate)
         // Formula for centroid of conical frustum relative to base (z1)

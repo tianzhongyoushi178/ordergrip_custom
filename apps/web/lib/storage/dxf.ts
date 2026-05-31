@@ -19,7 +19,7 @@
  */
 
 import { DxfWriter, Colors, point2d, point3d, Units, LWPolylineFlags } from '@tarikjabiri/dxf';
-import type { BarrelState, CutZone } from '@/lib/store/useBarrelStore';
+import type { BarrelState, CutZone, PolygonZone } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
 
 const HOLE_RADIUS = 2.1;
@@ -97,8 +97,8 @@ interface DxfBarrelInput {
     frontEndShape: BarrelState['frontEndShape'];
     rearEndShape: BarrelState['rearEndShape'];
     materialDensity: number;
-    /** 断面形状: 0/未指定 = 真円, 5〜11 = 正多角形 (対角=最大径) */
-    polygonSides?: number;
+    /** 多角形ゾーン: 指定区間の断面を正多角形に (対角=最大径)。空/未指定 = 全長真円 */
+    polygonZones?: PolygonZone[];
 }
 
 const materialName = (density: number): string => {
@@ -560,14 +560,15 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     dxf.addText(point3d(0, dimY - 6, 0), 2, materialName(input.materialDensity), { layerName: 'DIM' });
 
     // ============================================================
-    // 9. 断面図 (正多角形のとき) — バレル前端の左側に最大径断面を作図
+    // 9. 断面図 (多角形ゾーンごと) — バレル前端の左側に縦に並べて作図
     //    対角(頂点)=最大径で円に内接。穴は円形。
     // ============================================================
-    if (input.polygonSides !== undefined && input.polygonSides >= 5) {
-        const N = input.polygonSides;
+    const sectionZones = (input.polygonZones ?? []).filter((z) => z.sides >= 5);
+    sectionZones.forEach((zone, zi) => {
+        const N = zone.sides;
         const R = baseR; // 円周半径 = 最大径/2
         const cx = -(R + 14); // 前端 (z=0) のさらに左に配置
-        const cy = 0;
+        const cy = -zi * (2 * R + 8); // ゾーンごとに下へずらして並べる
         const vertexOffset = Math.PI / 2; // 頂点を上に向ける
 
         const polyPts = [];
@@ -589,10 +590,10 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         dxf.addText(
             point3d(cx - R, cy - R - 3, 0),
             1.8,
-            `SECTION ${N}-gon (across-corners ${input.maxDiameter.toFixed(1)}mm)`,
+            `SECTION ${N}-gon z${zone.startZ.toFixed(0)}-${zone.endZ.toFixed(0)}mm`,
             { layerName: 'SECTION' },
         );
-    }
+    });
 
     return dxf.stringify();
 };

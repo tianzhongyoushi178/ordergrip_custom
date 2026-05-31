@@ -26,6 +26,14 @@ export interface CutZone {
   }
 }
 
+/** 指定 Z 区間の断面を正多角形にする (対角=最大径で円に内接)。sides は 5〜11。 */
+export interface PolygonZone {
+  id: string;
+  startZ: number; // mm from front
+  endZ: number;   // mm from front
+  sides: number;  // 5〜11
+}
+
 export interface OutlinePoint {
   z: number; // Distance from front (mm)
   d: number; // Diameter (mm)
@@ -49,8 +57,8 @@ export interface BarrelState {
   outline: OutlinePoint[];
   outlineInterp: OutlineInterp; // 制御点間の補間方式
 
-  // 断面形状: 0 = 真円, 5〜11 = 正多角形 (対角=最大径で円に内接)
-  polygonSides: number;
+  // 多角形ゾーン: 指定 Z 区間の断面を正多角形に (空 = 全長真円)
+  polygonZones: PolygonZone[];
 
   // Material
   materialDensity: number; // g/cm3
@@ -72,7 +80,9 @@ export interface BarrelState {
   setMaterialDensity: (density: number) => void;
   setOutline: (outline: OutlinePoint[]) => void;
   setOutlineInterp: (interp: OutlineInterp) => void;
-  setPolygonSides: (sides: number) => void;
+  addPolygonZone: (zone: PolygonZone) => void;
+  removePolygonZone: (id: string) => void;
+  updatePolygonZone: (id: string, patch: Partial<PolygonZone>) => void;
   setAll: (state: Partial<BarrelState>) => void;
 
   // Camera Control
@@ -116,7 +126,7 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   rearEndShape: 'taper',
   outline: [],
   outlineInterp: 'smooth',
-  polygonSides: 0,
+  polygonZones: [],
   cuts: [],
 
   // 寸法変更は taper ベースの形状を維持。明示的な「カスタム」ボタン押下でのみ outline モードに移行。
@@ -156,10 +166,23 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   setMaterialDensity: (density) => set({ materialDensity: density }),
   setOutline: (outline) => set({ outline }),
   setOutlineInterp: (interp) => set({ outlineInterp: interp }),
-  // 0 = 真円, それ以外は 5〜11 にクランプ
-  setPolygonSides: (sides) => set({
-    polygonSides: sides <= 0 ? 0 : Math.min(11, Math.max(5, Math.round(sides))),
-  }),
+  addPolygonZone: (zone) => set((state) => ({ polygonZones: [...state.polygonZones, zone] })),
+  removePolygonZone: (id) => set((state) => ({
+    polygonZones: state.polygonZones.filter((z) => z.id !== id),
+  })),
+  // sides は 5〜11、startZ/endZ は 0〜length にクランプ
+  updatePolygonZone: (id, patch) => set((state) => ({
+    polygonZones: state.polygonZones.map((z) => {
+      if (z.id !== id) return z;
+      const merged = { ...z, ...patch };
+      return {
+        ...merged,
+        sides: Math.min(11, Math.max(5, Math.round(merged.sides))),
+        startZ: Math.max(0, Math.min(state.length, merged.startZ)),
+        endZ: Math.max(0, Math.min(state.length, merged.endZ)),
+      };
+    }),
+  })),
   setAll: (newState) => set((state) => ({ ...state, ...newState })),
 
   cameraResetTrigger: 0,

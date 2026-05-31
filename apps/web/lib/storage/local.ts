@@ -1,4 +1,4 @@
-import { BarrelState } from '@/lib/store/useBarrelStore';
+import { BarrelState, PolygonZone } from '@/lib/store/useBarrelStore';
 
 export const STORAGE_KEY = 'dart-barrel-design';
 
@@ -16,7 +16,7 @@ export const saveToLocalStorage = (state: Partial<BarrelState>) => {
         shapeType: state.shapeType,
         frontEndShape: state.frontEndShape,
         rearEndShape: state.rearEndShape,
-        polygonSides: state.polygonSides,
+        polygonZones: state.polygonZones,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
@@ -55,10 +55,30 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
         result.shapeType = raw.shapeType as BarrelState['shapeType'];
     }
 
-    // 断面形状: 0 = 真円, 5〜11 = 正多角形。範囲外は無視 (デフォルト維持)。
-    if (isFiniteNumber(raw.polygonSides)) {
+    // 多角形ゾーン: { id, startZ, endZ, sides(5..11) }[]。範囲外要素は無視。
+    if (Array.isArray(raw.polygonZones)) {
+        const zones: PolygonZone[] = [];
+        raw.polygonZones.forEach((z, i) => {
+            if (typeof z !== 'object' || z === null) return;
+            const r = z as Record<string, unknown>;
+            if (!isFiniteNumber(r.startZ) || !isFiniteNumber(r.endZ) || !isFiniteNumber(r.sides)) return;
+            const sides = Math.round(r.sides);
+            if (sides < 5 || sides > 11) return;
+            zones.push({
+                id: typeof r.id === 'string' ? r.id : `pz-${i}`,
+                startZ: r.startZ,
+                endZ: r.endZ,
+                sides,
+            });
+        });
+        result.polygonZones = zones;
+    } else if (isFiniteNumber(raw.polygonSides)) {
+        // 旧形式 (全長一律の polygonSides) を全長 1 ゾーンへ移行
         const sides = Math.round(raw.polygonSides);
-        if (sides === 0 || (sides >= 5 && sides <= 11)) result.polygonSides = sides;
+        if (sides >= 5 && sides <= 11) {
+            const len = isFiniteNumber(raw.length) && raw.length > 0 ? raw.length : 100;
+            result.polygonZones = [{ id: 'pz-legacy', startZ: 0, endZ: len, sides }];
+        }
     }
     if (typeof raw.frontEndShape === 'string' && ['taper', 'round', 'convex'].includes(raw.frontEndShape)) {
         result.frontEndShape = raw.frontEndShape as BarrelState['frontEndShape'];

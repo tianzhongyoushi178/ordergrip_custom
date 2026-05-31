@@ -176,6 +176,41 @@ describe('storage/local', () => {
       const result = validateBarrelData({});
       expect(Object.keys(result)).toHaveLength(0);
     });
+
+    it('polygonZones を検証 (不正要素は除外・id 補完)', () => {
+      const result = validateBarrelData({
+        polygonZones: [
+          { id: 'z1', startZ: 10, endZ: 20, sides: 6 },
+          { startZ: 0, endZ: 5, sides: 7 },      // id なし → 補完
+          { startZ: 5, endZ: 8, sides: 3 },       // sides<5 → 除外
+          { startZ: 5, endZ: 8, sides: 'bad' },   // 不正 → 除外
+        ],
+      });
+      expect(result.polygonZones).toHaveLength(2);
+      expect(result.polygonZones!.every((z) => typeof z.id === 'string' && z.id.length > 0)).toBe(true);
+      expect(result.polygonZones![0].sides).toBe(6);
+    });
+
+    it('旧 polygonSides を全長1ゾーンへ移行する', () => {
+      const result = validateBarrelData({ length: 45, polygonSides: 8 });
+      expect(result.polygonZones).toHaveLength(1);
+      expect(result.polygonZones![0]).toMatchObject({ startZ: 0, endZ: 45, sides: 8 });
+    });
+
+    it('旧 polygonSides=0 は移行しない (円のまま)', () => {
+      const result = validateBarrelData({ length: 45, polygonSides: 0 });
+      expect(result.polygonZones).toBeUndefined();
+    });
+
+    it('polygonZones がある場合は旧 polygonSides を無視する', () => {
+      const result = validateBarrelData({
+        length: 45,
+        polygonSides: 8,
+        polygonZones: [{ id: 'z1', startZ: 10, endZ: 20, sides: 6 }],
+      });
+      expect(result.polygonZones).toHaveLength(1);
+      expect(result.polygonZones![0].sides).toBe(6);
+    });
   });
 
   // =========================================

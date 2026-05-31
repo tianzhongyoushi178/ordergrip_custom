@@ -167,6 +167,51 @@ describe('useBarrelStore', () => {
   });
 
   // =========================================
+  // 多角形ゾーン操作
+  // =========================================
+  describe('多角形ゾーン操作', () => {
+    beforeEach(() => {
+      useBarrelStore.setState({ polygonZones: [], length: 45 });
+    });
+
+    it('多角形ゾーンを追加する', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      expect(useBarrelStore.getState().polygonZones).toHaveLength(1);
+      expect(useBarrelStore.getState().polygonZones[0].sides).toBe(6);
+    });
+
+    it('多角形ゾーンを削除する', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      useBarrelStore.getState().removePolygonZone('p1');
+      expect(useBarrelStore.getState().polygonZones).toHaveLength(0);
+    });
+
+    it('sides を 5〜11 にクランプして更新する', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      useBarrelStore.getState().updatePolygonZone('p1', { sides: 20 });
+      expect(useBarrelStore.getState().polygonZones[0].sides).toBe(11);
+      useBarrelStore.getState().updatePolygonZone('p1', { sides: 2 });
+      expect(useBarrelStore.getState().polygonZones[0].sides).toBe(5);
+    });
+
+    it('startZ/endZ を 0〜length にクランプして更新する', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      useBarrelStore.getState().updatePolygonZone('p1', { startZ: -5, endZ: 999 });
+      const zone = useBarrelStore.getState().polygonZones[0];
+      expect(zone.startZ).toBe(0);
+      expect(zone.endZ).toBe(45);
+    });
+
+    it('複数ゾーンを管理できる', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 5, endZ: 15, sides: 6 });
+      useBarrelStore.getState().addPolygonZone({ id: 'p2', startZ: 20, endZ: 30, sides: 8 });
+      expect(useBarrelStore.getState().polygonZones).toHaveLength(2);
+      useBarrelStore.getState().removePolygonZone('p1');
+      expect(useBarrelStore.getState().polygonZones[0].id).toBe('p2');
+    });
+  });
+
+  // =========================================
   // setAll
   // =========================================
   describe('setAll', () => {

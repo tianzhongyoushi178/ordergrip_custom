@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CutZone, EndShape, OutlineInterp } from '../store/useBarrelStore';
+import { CutZone, EndShape, OutlineInterp, PolygonZone } from '../store/useBarrelStore';
 
 /**
  * アウトラインの d(z) を制御点間で補間する。
@@ -312,6 +312,17 @@ export const polygonAreaFactor = (sides: number): number => {
     return (sides * Math.sin((Math.PI * 2) / sides)) / (Math.PI * 2);
 };
 
+/**
+ * Z 位置 z を含む最初の多角形ゾーンの角数を返す。該当ゾーンが無ければ 0 (真円)。
+ * generator / physics(呼び出し側) / dxf で共用する区間判定。
+ */
+export const polygonSidesAt = (zones: PolygonZone[], z: number): number => {
+    for (const zone of zones) {
+        if (zone.sides >= 5 && z >= zone.startZ && z < zone.endZ) return zone.sides;
+    }
+    return 0;
+};
+
 export const generateBarrelGeometry = (
     length: number,
     maxDiameter: number,
@@ -324,7 +335,7 @@ export const generateBarrelGeometry = (
     frontEndShape: EndShape = 'taper',
     rearEndShape: EndShape = 'taper',
     outlineInterp: OutlineInterp = 'smooth',
-    polygonSides: number = 0,
+    polygonZones: PolygonZone[] = [],
 ): THREE.BufferGeometry => {
     // 1. Get Base Profile (Outer surface only)
     const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
@@ -405,36 +416,21 @@ export const generateBarrelGeometry = (
     // 周方向のサンプル列を構築する。各列は { theta, u, bridgeNext } を持ち、
     // bridgeNext=false の列は次列との間に面(quad)を張らない = ジオメトリの切れ目。
     //
-    // 真円: 0→2π を radialSegments 分割した一様リング(末尾だけ非ブリッジ)。
-    // 多角形: 各面ごとに頂点を分離生成し、面境界(多角形の角)を非ブリッジにする。
-    //   → computeVertexNormals が角をまたいで法線を平均しないため、面はフラット・
-    //     角はシャープに描画される(穴・テーパー方向は滑らかなまま)。
+    // 多角形は「区間ごとに角数が変わる」ため、全断面で共通の一様リングを使い、
+    // 各断面で polygonSidesAt(y) に応じた多角形係数を半径に掛ける(スムース表現)。
+    // 多角形ゾーンがある場合は flats を滑らかに見せるため解像度を引き上げる。
+    const hasPolygon = polygonZones.some((z) => z.sides >= 5);
     const ring: { theta: number; u: number; bridgeNext: boolean }[] = [];
-    const isPolygon = polygonSides >= 5;
-    if (isPolygon) {
-        const N = polygonSides;
-        const seg = (Math.PI * 2) / N;
-        // 穴(円形)を滑らかに見せるため最低 ~48 列を確保。縦溝があれば解像度を上げる。
-        let perFace = Math.max(6, Math.ceil(48 / N));
-        if (required > 64) perFace = Math.max(perFace, Math.ceil(required / N));
-        perFace = Math.min(perFace, Math.floor(1024 / N));
-        for (let f = 0; f < N; f++) {
-            for (let c = 0; c <= perFace; c++) {
-                const theta = (f + c / perFace) * seg;
-                ring.push({ theta, u: theta / (Math.PI * 2), bridgeNext: c < perFace });
-            }
-        }
-    } else {
-        let radialSegments = required;
-        if (maxVCount > 0) radialSegments = Math.ceil(radialSegments / maxVCount) * maxVCount;
-        radialSegments = Math.min(radialSegments, 1024);
-        for (let j = 0; j <= radialSegments; j++) {
-            ring.push({
-                theta: (j / radialSegments) * Math.PI * 2,
-                u: j / radialSegments,
-                bridgeNext: j < radialSegments,
-            });
-        }
+    let radialSegments = required;
+    if (hasPolygon) radialSegments = Math.max(radialSegments, 128);
+    if (maxVCount > 0) radialSegments = Math.ceil(radialSegments / maxVCount) * maxVCount;
+    radialSegments = Math.min(radialSegments, 1024);
+    for (let j = 0; j <= radialSegments; j++) {
+        ring.push({
+            theta: (j / radialSegments) * Math.PI * 2,
+            u: j / radialSegments,
+            bridgeNext: j < radialSegments,
+        });
     }
     const cols = ring.length;
     const heightSegments = points.length - 1;
@@ -477,12 +473,15 @@ export const generateBarrelGeometry = (
             isOuterSurface = true;
         }
 
+        // この断面の Z 位置(y)が属する多角形ゾーンの角数 (外周面のみ・無ければ 0=円)
+        const sectionSides = isOuterSurface ? polygonSidesAt(polygonZones, y) : 0;
+
         for (let jc = 0; jc < cols; jc++) {
             const { theta, u } = ring[jc];
 
             // 外周面のみ多角形化(穴・端面は円のまま)。rBase を多角形の円周半径とみなす。
-            const rSurf = isOuterSurface && isPolygon
-                ? rBase * polygonRadiusFactor(theta, polygonSides)
+            const rSurf = sectionSides >= 5
+                ? rBase * polygonRadiusFactor(theta, sectionSides)
                 : rBase;
 
             let rMod = 0;
