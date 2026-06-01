@@ -241,11 +241,11 @@ const CUT_DATA: readonly CutMeta[] = [
             </g>
         ),
     },
-    // --- ローレット系 ---
+    // --- スパイラル / ローレット系 ---
     {
-        id: 'helical', name: '斜目ローレット',
+        id: 'helical', name: 'スパイラル',
         strength: 'やや強', lifespan: '○', maintenance: '△',
-        description: '斜めの螺旋溝。掛かりと抜けのバランスが良いローレット。',
+        description: '斜めの螺旋溝(スパイラル加工)。掛かりと抜けのバランスが良い。',
         groovePath: (
             <g stroke="currentColor" fill="none" strokeWidth="1">
                 <line x1="4" y1="20" x2="10" y2="4" />

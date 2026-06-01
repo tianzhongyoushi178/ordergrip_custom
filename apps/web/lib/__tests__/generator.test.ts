@@ -430,6 +430,40 @@ describe('generateBarrelGeometry', () => {
     expect(outZone.length).toBeGreaterThan(0);
     expect(Math.max(...outZone) - Math.min(...outZone)).toBeLessThan(0.05);
   });
+
+  it('多角形ゾーン内のリング溝は円形・外形のみ多角形', () => {
+    const ringCut: CutZone[] = [{
+      id: 'r1', type: 'ring', startZ: 16, endZ: 29,
+      properties: { pitch: 3.0, depth: 0.5, cutWidth: 1.5 },
+    }];
+    const zones: PolygonZone[] = [{ id: 'z1', startZ: 15, endZ: 30, sides: 6 }];
+    const geom = generateBarrelGeometry(45, 7.0, ringCut, 10, 10, 8, 8, [], 'taper', 'taper', 'smooth', zones);
+    const pos = geom.getAttribute('position');
+
+    // z スライスごとに外周半径を集計し、平均(径の大小)と spread(周方向の変動)を出す
+    const slices = new Map<number, number[]>();
+    for (let i = 0; i < pos.count; i++) {
+      const bz = Math.round(-pos.getY(i) * 10) / 10;
+      if (bz > 16 && bz < 29) {
+        const r = Math.hypot(pos.getX(i), pos.getZ(i));
+        if (r > 2.5) {
+          if (!slices.has(bz)) slices.set(bz, []);
+          slices.get(bz)!.push(r);
+        }
+      }
+    }
+    let grooveSpread = Infinity, crestSpread = 0, minAvg = Infinity, maxAvg = 0;
+    for (const rs of slices.values()) {
+      const avg = rs.reduce((a, b) => a + b, 0) / rs.length;
+      const spread = Math.max(...rs) - Math.min(...rs);
+      if (avg < minAvg) { minAvg = avg; grooveSpread = spread; }
+      if (avg > maxAvg) { maxAvg = avg; crestSpread = spread; }
+    }
+    // 外形ピーク(最大径スライス)は多角形 → 周方向に半径変動あり
+    expect(crestSpread).toBeGreaterThan(0.2);
+    // リング溝底(最小径スライス)は円形 → 周方向の変動はごく小さい
+    expect(grooveSpread).toBeLessThan(crestSpread * 0.5);
+  });
 });
 
 describe('polygonSidesAt', () => {

@@ -340,6 +340,27 @@ export const generateBarrelGeometry = (
     // 1. Get Base Profile (Outer surface only)
     const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
 
+    // 多角形化の基準となる「カットなし外形エンベロープ」(リング溝等を除いた最大径輪郭)。
+    // 多角形は外形のみに適用し、溝部分は円形に保つため、各 z でこのエンベロープ半径を参照する。
+    const hasPolygonZone = polygonZones.some((pz) => pz.sides >= 5);
+    const envOuter = hasPolygonZone
+        ? generateProfile(length, maxDiameter, [], frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp)
+        : outerPoints;
+    // z (バレル軸方向 mm) → エンベロープ半径。envOuter は z 昇順なので二分探索で線形補間。
+    const envRAt = (z: number): number => {
+        const n = envOuter.length;
+        if (n === 0) return 0;
+        if (z <= envOuter[0].y) return envOuter[0].x;
+        if (z >= envOuter[n - 1].y) return envOuter[n - 1].x;
+        let lo = 0, hi = n - 1;
+        while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (envOuter[mid].y <= z) lo = mid; else hi = mid;
+        }
+        const a = envOuter[lo], b = envOuter[hi];
+        return b.y === a.y ? a.x : a.x + (b.x - a.x) * ((z - a.y) / (b.y - a.y));
+    };
+
     // 2. Construct FULL Profile (Inner -> Outer -> Inner)
     // 2BA Hole Radius approx 2.1mm
     const holeRadius = 2.1;
@@ -475,13 +496,19 @@ export const generateBarrelGeometry = (
 
         // この断面の Z 位置(y)が属する多角形ゾーンの角数 (外周面のみ・無ければ 0=円)
         const sectionSides = isOuterSurface ? polygonSidesAt(polygonZones, y) : 0;
+        // 多角形化は外形(エンベロープ)のみに適用する。リング溝等で削れた部分(cutDepth>0)は
+        // 多角形 inset を弱めて円形 rBase を保つ(溝まで多角形にならないようにする)。
+        const envR = sectionSides >= 5 ? envRAt(y) : rBase;
+        const cutDepth = sectionSides >= 5 ? Math.max(0, envR - rBase) : 0;
+        const polyWeight = sectionSides >= 5 ? Math.max(0, 1 - cutDepth / 0.05) : 0;
 
         for (let jc = 0; jc < cols; jc++) {
             const { theta, u } = ring[jc];
 
-            // 外周面のみ多角形化(穴・端面は円のまま)。rBase を多角形の円周半径とみなす。
+            // 外形のみ多角形化: 凹み env*(1-factor) を外形部分(polyWeight≈1)にのみ適用。
+            // 溝部分(polyWeight≈0)・穴・端面は円形のまま。
             const rSurf = sectionSides >= 5
-                ? rBase * polygonRadiusFactor(theta, sectionSides)
+                ? rBase - envR * (1 - polygonRadiusFactor(theta, sectionSides)) * polyWeight
                 : rBase;
 
             let rMod = 0;

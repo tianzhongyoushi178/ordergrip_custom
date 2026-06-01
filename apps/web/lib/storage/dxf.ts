@@ -546,7 +546,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         if (cut.type === 'helical' || cut.type === 'cross') {
             const midZ = (cut.startZ + cut.endZ) / 2;
             const n = cut.properties.itemCount ?? 12;
-            const label = cut.type === 'cross' ? `KNURL diamond x${n}` : `KNURL helical x${n}`;
+            const label = cut.type === 'cross' ? `KNURL diamond x${n}` : `SPIRAL x${n}`;
             dxf.addText(point3d(midZ - 8, labelOffset + 0.5, 0), 1.5, `${label} z${cut.startZ.toFixed(0)}-${cut.endZ.toFixed(0)}`, { layerName: 'CUT_LABEL' });
             continue;
         }

@@ -827,7 +827,7 @@ export const Editor = () => {
                                     <option value="stair">ステアカット</option>
                                     <option value="micro">マイクロカット</option>
                                     <option value="vertical">縦カット</option>
-                                    <option value="helical">斜目ローレット</option>
+                                    <option value="helical">スパイラル</option>
                                     <option value="cross">綾目ローレット</option>
                                 </select>
 
