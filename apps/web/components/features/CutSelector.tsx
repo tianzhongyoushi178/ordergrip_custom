@@ -9,6 +9,7 @@ export interface CutParams {
     count?: number;
     gapWidth?: number;
     itemCount?: number;
+    twistDeg?: number; // 斜目/綾目ローレットのねじれ角(度)
 }
 
 interface CutSelectorProps {
@@ -30,6 +31,8 @@ const PARAM_DEFAULTS: Record<CutType, CutParams> = {
     scallop:     { cutWidth: 2.0, depth: 0.4, spacing: 0,   count: 5 },
     micro:       { cutWidth: 0.5, depth: 0.15, spacing: 0.5, count: 10 },
     vertical:    { depth: 0.5, count: 1, itemCount: 12 },
+    helical:     { depth: 0.4, count: 1, itemCount: 24, twistDeg: 360 },
+    cross:       { depth: 0.4, count: 1, itemCount: 24, twistDeg: 360 },
     none:        {},
 };
 
@@ -235,6 +238,34 @@ const CUT_DATA: readonly CutMeta[] = [
                 <line x1="10" y1="5" x2="10" y2="19" strokeDasharray="2 2" />
                 <line x1="14" y1="5" x2="14" y2="19" strokeDasharray="2 2" />
                 <line x1="18" y1="5" x2="18" y2="19" strokeDasharray="2 2" />
+            </g>
+        ),
+    },
+    // --- ローレット系 ---
+    {
+        id: 'helical', name: '斜目ローレット',
+        strength: 'やや強', lifespan: '○', maintenance: '△',
+        description: '斜めの螺旋溝。掛かりと抜けのバランスが良いローレット。',
+        groovePath: (
+            <g stroke="currentColor" fill="none" strokeWidth="1">
+                <line x1="4" y1="20" x2="10" y2="4" />
+                <line x1="9" y1="20" x2="15" y2="4" />
+                <line x1="14" y1="20" x2="20" y2="4" />
+            </g>
+        ),
+    },
+    {
+        id: 'cross', name: '綾目ローレット',
+        strength: '強', lifespan: '○', maintenance: '△',
+        description: 'ダイヤ状に交差する溝。最も一般的で強いグリップ。',
+        groovePath: (
+            <g stroke="currentColor" fill="none" strokeWidth="0.9">
+                <line x1="4" y1="20" x2="10" y2="4" />
+                <line x1="9" y1="20" x2="15" y2="4" />
+                <line x1="14" y1="20" x2="20" y2="4" />
+                <line x1="10" y1="20" x2="4" y2="4" />
+                <line x1="15" y1="20" x2="9" y2="4" />
+                <line x1="20" y1="20" x2="14" y2="4" />
             </g>
         ),
     },

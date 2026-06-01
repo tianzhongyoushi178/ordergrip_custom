@@ -140,8 +140,8 @@ export const generateProfile = (
                 const localZ = z - cut.startZ;
 
                 // --- CUT PROFILE LOGIC ---
-                // Vertical cuts are handled in 3D generation, skip here
-                if (cut.type === 'vertical') continue;
+                // 周方向加工 (縦溝/斜目/綾目) は 3D 生成で処理。2D プロファイル(=物理)からは除外。
+                if (cut.type === 'vertical' || cut.type === 'helical' || cut.type === 'cross') continue;
 
                 // factor: 0.0 to 1.0 (0=Start of pitch, 1=End of pitch)
                 const cycle = localZ % pitch;
@@ -388,24 +388,24 @@ export const generateBarrelGeometry = (
     points.push(new THREE.Vector2(0.001, length - holeDepthRear));
 
     // 3. Build Mesh Data
-    // Pre-filter vertical cuts
-    const verticalCuts = cuts.filter(c => c.type === 'vertical');
+    // Pre-filter circumferential (knurl) cuts: 縦溝/斜目/綾目 (3Dで周方向に溝を掘る)
+    const knurlCuts = cuts.filter(c => c.type === 'vertical' || c.type === 'helical' || c.type === 'cross');
 
-    // Adaptive radial resolution: a fixed 64 under-samples narrow vertical
-    // grooves. With count=8 / grooveFraction=0.1 only the boundary vertex hits
-    // the groove and edgeFade zeros its depth, making the cut vanish. Counts
-    // that don't divide segments evenly also alias. Scale segments so each
-    // groove gets MIN_VERTS_PER_GROOVE samples and align with the densest count.
+    // Adaptive radial resolution: a fixed 64 under-samples narrow grooves.
+    // With count=8 / grooveFraction=0.1 only the boundary vertex hits the groove
+    // and edgeFade zeros its depth, making the cut vanish. Counts that don't
+    // divide segments evenly also alias. Scale segments so each groove gets
+    // MIN_VERTS_PER_GROOVE samples and align with the densest count.
     let required = 64;
     let maxVCount = 0;
-    if (verticalCuts.length > 0) {
+    if (knurlCuts.length > 0) {
         const MIN_VERTS_PER_GROOVE = 6;
         const MIN_GROOVE_FRACTION = 0.05;
-        for (const vCut of verticalCuts) {
-            const count = vCut.properties.itemCount || 12;
+        for (const kCut of knurlCuts) {
+            const count = kCut.properties.itemCount || 12;
             const grooveFraction = Math.max(
                 MIN_GROOVE_FRACTION,
-                vCut.properties.grooveFraction ?? 0.5
+                kCut.properties.grooveFraction ?? 0.5
             );
             const needed = Math.ceil((count * MIN_VERTS_PER_GROOVE) / grooveFraction);
             if (needed > required) required = needed;
@@ -488,42 +488,55 @@ export const generateBarrelGeometry = (
 
             // Apply modifications based on surface
             if (isOuterSurface) {
-                // Vertical Cuts Logic — 縦溝（幅・底形状・長さ指定可能）
-                for (const vCut of verticalCuts) {
-                    if (y >= vCut.startZ && y < vCut.endZ) {
-                        const count = vCut.properties.itemCount || 12;
-                        const vDepth = vCut.properties.depth || 0.5;
-                        const grooveFraction = vCut.properties.grooveFraction ?? 0.5;
-                        const bottomShape = vCut.properties.bottomShape ?? 'flat';
+                // 周方向の溝 (縦溝/斜目/綾目)。斜目・綾目は Z に沿って溝をねじる。
+                for (const kCut of knurlCuts) {
+                    if (y >= kCut.startZ && y < kCut.endZ) {
+                        const count = kCut.properties.itemCount || 12;
+                        const vDepth = kCut.properties.depth || 0.5;
+                        const grooveFraction = kCut.properties.grooveFraction ?? 0.5;
+                        const bottomShape = kCut.properties.bottomShape ?? 'flat';
                         const segmentRad = (Math.PI * 2) / count;
-                        const localTheta = (theta % segmentRad) / segmentRad;
 
-                        if (localTheta < grooveFraction) {
-                            // 溝内の位置 (0=溝端, 0.5=中央, 1=溝端)
-                            const gf = localTheta / grooveFraction; // 0..1
-                            const edgeWidth = 0.1; // エッジ遷移幅（溝幅に対する比率）
-                            // エッジスムーズ係数 (0→1→1→0)
-                            let edgeFade = 1;
-                            if (gf < edgeWidth) edgeFade = gf / edgeWidth;
-                            else if (gf > 1 - edgeWidth) edgeFade = (1 - gf) / edgeWidth;
+                        // ねじれ率 (rad/mm): vertical=0。total twistDeg をゾーン長で割る。
+                        const zoneLen = Math.max(1e-6, kCut.endZ - kCut.startZ);
+                        const twistRate = kCut.type === 'vertical'
+                            ? 0
+                            : ((kCut.properties.twistDeg ?? 0) * Math.PI / 180) / zoneLen;
+                        // 溝の方向: 斜目=1本, 綾目=逆向き2本(交差), 縦溝=ねじれ無し
+                        const dirs = kCut.type === 'cross' ? [1, -1] : kCut.type === 'helical' ? [1] : [0];
+                        const localZ = y - kCut.startZ;
 
-                            let depthFactor: number;
-                            switch (bottomShape) {
-                                case 'v':
-                                    // V字: 中央が最深
-                                    depthFactor = 1 - 2 * Math.abs(gf - 0.5);
-                                    break;
-                                case 'round':
-                                    // U字/丸底: sin曲線
-                                    depthFactor = Math.sin(gf * Math.PI);
-                                    break;
-                                case 'flat':
-                                default:
-                                    // フラット底 + エッジ遷移
-                                    depthFactor = edgeFade;
-                                    break;
+                        for (const dir of dirs) {
+                            const shifted = theta + dir * twistRate * localZ;
+                            let localTheta = (shifted % segmentRad) / segmentRad;
+                            if (localTheta < 0) localTheta += 1; // 負の剰余を 0..1 に正規化
+
+                            if (localTheta < grooveFraction) {
+                                // 溝内の位置 (0=溝端, 0.5=中央, 1=溝端)
+                                const gf = localTheta / grooveFraction; // 0..1
+                                const edgeWidth = 0.1; // エッジ遷移幅（溝幅に対する比率）
+                                let edgeFade = 1;
+                                if (gf < edgeWidth) edgeFade = gf / edgeWidth;
+                                else if (gf > 1 - edgeWidth) edgeFade = (1 - gf) / edgeWidth;
+
+                                let depthFactor: number;
+                                switch (bottomShape) {
+                                    case 'v':
+                                        // V字: 中央が最深
+                                        depthFactor = 1 - 2 * Math.abs(gf - 0.5);
+                                        break;
+                                    case 'round':
+                                        // U字/丸底: sin曲線
+                                        depthFactor = Math.sin(gf * Math.PI);
+                                        break;
+                                    case 'flat':
+                                    default:
+                                        // フラット底 + エッジ遷移
+                                        depthFactor = edgeFade;
+                                        break;
+                                }
+                                rMod = Math.max(rMod, vDepth * depthFactor);
                             }
-                            rMod = Math.max(rMod, vDepth * depthFactor);
                         }
                     }
                 }

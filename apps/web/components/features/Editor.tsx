@@ -151,13 +151,13 @@ export const Editor = () => {
 
     // Collision check helper
     const checkCollision = (id: string | null, start: number, end: number, type: string): boolean => {
-        // Vertical cuts can overlap anything.
-        if (type === 'vertical') return false;
+        // 周方向加工 (縦溝/斜目/綾目) は他カットと重なってよい。
+        if (type === 'vertical' || type === 'helical' || type === 'cross') return false;
 
         return cuts.some(c => {
             if (c.id === id) return false;
-            // Existing vertical cuts don't block
-            if (c.type === 'vertical') return false;
+            // 周方向加工はブロックしない
+            if (c.type === 'vertical' || c.type === 'helical' || c.type === 'cross') return false;
 
             // Overlap condition
             return (end > c.startZ && start < c.endZ);
@@ -209,6 +209,8 @@ export const Editor = () => {
             case 'scallop':    return { cutWidth: 2.0, depth: 0.4, spacing: 0, count: 5 };
             case 'micro':      return { cutWidth: 0.5, depth: 0.15, spacing: 0.5, count: 10 };
             case 'vertical':   return { cutWidth: 1.0, depth: 0.5, spacing: 0, count: 1, itemCount: 12 };
+            case 'helical':    return { cutWidth: 1.0, depth: 0.4, spacing: 0, count: 1, itemCount: 24 };
+            case 'cross':      return { cutWidth: 1.0, depth: 0.4, spacing: 0, count: 1, itemCount: 24 };
             default:           return { cutWidth: 1.0, depth: 0.3, spacing: 1.0, count: 5 };
         }
     };
@@ -222,6 +224,25 @@ export const Editor = () => {
         const count = userParams?.count ?? d.count;
         const gapWidth = userParams?.gapWidth ?? d.gapWidth;
         const itemCount = userParams?.itemCount ?? d.itemCount;
+
+        // 周方向ローレット (斜目/綾目): 中央1/3を既定ゾーンに、ねじれ付きで配置 (重なり許容)
+        if (type === 'helical' || type === 'cross') {
+            const zoneLen = Math.min(length, Math.max(8, length / 3));
+            const knurlStart = Math.max(0, (length - zoneLen) / 2);
+            addCut({
+                id: Math.random().toString(36).substr(2, 9),
+                type,
+                startZ: Math.round(knurlStart * 10) / 10,
+                endZ: Math.round((knurlStart + zoneLen) * 10) / 10,
+                properties: {
+                    depth,
+                    itemCount: itemCount ?? 24,
+                    grooveFraction: 0.5,
+                    twistDeg: userParams?.twistDeg ?? 360,
+                },
+            });
+            return;
+        }
 
         // Compute active width for double/triple
         let activeWidth = cutWidth;
@@ -742,6 +763,7 @@ export const Editor = () => {
                             const curCount = getCount(cut.startZ, cut.endZ, pitch);
                             const curDepth = cut.properties.depth || 0.5;
                             const isVertical = cut.type === 'vertical';
+                            const isKnurl = isVertical || cut.type === 'helical' || cut.type === 'cross';
 
                             /** 溝幅/間隔/カット数の変更時にpitchとendZを再計算してストアを更新 */
                             const updateDerived = (nextCutWidth: number, nextSpacing: number, nextCount: number, extraProps?: Record<string, number>) => {
@@ -805,6 +827,8 @@ export const Editor = () => {
                                     <option value="stair">ステアカット</option>
                                     <option value="micro">マイクロカット</option>
                                     <option value="vertical">縦カット</option>
+                                    <option value="helical">斜目ローレット</option>
+                                    <option value="cross">綾目ローレット</option>
                                 </select>
 
                                 <div className="space-y-3">
@@ -845,9 +869,9 @@ export const Editor = () => {
 
                                     {/* メインパラメータ 2x2 グリッド */}
                                     <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50">
-                                        {isVertical ? (
+                                        {isKnurl ? (
                                             <>
-                                                {/* 縦カット: 本数 + 溝深さ */}
+                                                {/* 縦溝/ローレット: 本数 + 溝深さ */}
                                                 <div>
                                                     <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                                                         <span>本数</span>
@@ -942,8 +966,8 @@ export const Editor = () => {
                                             />
                                         </div>
                                     )}
-                                    {/* Vertical: 追加パラメータ */}
-                                    {isVertical && (
+                                    {/* 縦溝/ローレット: 追加パラメータ */}
+                                    {isKnurl && (
                                         <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50 space-y-3">
                                             {/* 終了位置（溝長さ） */}
                                             <div>
@@ -1017,8 +1041,25 @@ export const Editor = () => {
                                         </div>
                                     )}
 
+                                    {/* ねじれ角 (斜目/綾目ローレットのみ) */}
+                                    {(cut.type === 'helical' || cut.type === 'cross') && (
+                                        <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50">
+                                            <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                                                <span>ねじれ角</span>
+                                                <span className="text-zinc-400">{Math.round(cut.properties.twistDeg ?? 360)}°</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={0} max={720} step={15}
+                                                value={cut.properties.twistDeg ?? 360}
+                                                onChange={(e) => updateCut(cut.id, { properties: { ...cut.properties, twistDeg: parseFloat(e.target.value) } })}
+                                                className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                            />
+                                        </div>
+                                    )}
+
                                     {/* ゾーン情報（読み取り専用） */}
-                                    {!isVertical && (
+                                    {!isKnurl && (
                                         <div className="text-[10px] text-zinc-400 text-right pt-1">
                                             {cut.startZ.toFixed(1)}〜{cut.endZ.toFixed(1)}mm（全幅 {(cut.endZ - cut.startZ).toFixed(1)}mm）
                                         </div>

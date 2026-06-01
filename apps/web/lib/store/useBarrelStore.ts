@@ -5,7 +5,7 @@ export type CutType =
   | 'ring_r' | 'ring_v'
   | 'canyon' | 'step' | 'stair'
   | 'scallop' | 'shark' | 'wing'
-  | 'micro' | 'vertical' | 'none';
+  | 'micro' | 'vertical' | 'helical' | 'cross' | 'none';
 
 // taper: 直線テーパー / round: 凹R（先細りで根元が急に膨らむ） / convex: 凸R（先端からなめらかに膨らむ）
 export type EndShape = 'taper' | 'round' | 'convex';
@@ -23,6 +23,7 @@ export interface CutZone {
     gapWidth?: number;  // カット間 mm (double/triple用)
     grooveFraction?: number; // 縦カット溝幅比率 (0.1〜0.9, default 0.5)
     bottomShape?: 'flat' | 'v' | 'round'; // 縦カット底形状
+    twistDeg?: number; // 斜目/綾目ローレットのゾーン全長でのねじれ角(度)
   }
 }
 

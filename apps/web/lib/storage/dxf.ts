@@ -224,7 +224,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     // 2. 上半輪郭の頂点列を構築
     // ============================================================
     const sortedCuts = input.cuts
-        .filter((c) => c.type !== 'vertical' && c.startZ < c.endZ)
+        .filter((c) => c.type !== 'vertical' && c.type !== 'helical' && c.type !== 'cross' && c.startZ < c.endZ)
         .slice()
         .sort((a, b) => a.startZ - b.startZ);
 
@@ -540,7 +540,16 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     // ============================================================
     const labelOffset = baseR + 4;
     for (const cut of input.cuts) {
+        // 縦溝は従来どおり断面図に注釈しない (3D固有)
         if (cut.type === 'vertical') continue;
+        // 斜目/綾目ローレットは側面輪郭に出ないため、ゾーンにパターン注記を描く
+        if (cut.type === 'helical' || cut.type === 'cross') {
+            const midZ = (cut.startZ + cut.endZ) / 2;
+            const n = cut.properties.itemCount ?? 12;
+            const label = cut.type === 'cross' ? `KNURL diamond x${n}` : `KNURL helical x${n}`;
+            dxf.addText(point3d(midZ - 8, labelOffset + 0.5, 0), 1.5, `${label} z${cut.startZ.toFixed(0)}-${cut.endZ.toFixed(0)}`, { layerName: 'CUT_LABEL' });
+            continue;
+        }
         dxf.addLine(point3d(cut.startZ, baseR + 1, 0), point3d(cut.startZ, labelOffset, 0), { layerName: 'CUT_LABEL' });
         dxf.addLine(point3d(cut.endZ, baseR + 1, 0), point3d(cut.endZ, labelOffset, 0), { layerName: 'CUT_LABEL' });
         dxf.addLine(point3d(cut.startZ, labelOffset, 0), point3d(cut.endZ, labelOffset, 0), { layerName: 'CUT_LABEL' });

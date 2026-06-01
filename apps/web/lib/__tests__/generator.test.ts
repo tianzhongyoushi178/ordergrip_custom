@@ -455,3 +455,60 @@ describe('polygonSidesAt', () => {
     expect(polygonSidesAt([{ id: 'x', startZ: 0, endZ: 50, sides: 3 }], 25)).toBe(0);
   });
 });
+
+describe('ローレット (helical / cross)', () => {
+  const knurl = (type: 'helical' | 'cross', twistDeg = 360): CutZone => ({
+    id: 'k', type, startZ: 10, endZ: 35,
+    properties: { depth: 0.4, itemCount: 12, grooveFraction: 0.4, twistDeg },
+  });
+
+  // 指定バレル Z 位置の外周面頂点の半径 (vertex.y = -Z、半径 = √(x²+z²)、穴は r>2.5 で除外)
+  const radiiAt = (geom: ReturnType<typeof generateBarrelGeometry>, bz: number): number[] => {
+    const pos = geom.getAttribute('position');
+    const out: number[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(-pos.getY(i) - bz) < 0.05) {
+        const r = Math.hypot(pos.getX(i), pos.getZ(i));
+        if (r > 2.5) out.push(r);
+      }
+    }
+    return out;
+  };
+
+  it('helical(斜目): ゾーン内に溝(半径減)が生じる', () => {
+    const geom = generateBarrelGeometry(45, 7.0, [knurl('helical')], 10, 10, 8, 8);
+    const r = radiiAt(geom, 22.5);
+    expect(r.length).toBeGreaterThan(0);
+    expect(Math.min(...r)).toBeLessThan(3.4); // 最大径域の base 3.5 から溝で減る
+  });
+
+  it('cross(綾目): ゾーン内に溝(半径減)が生じる', () => {
+    const geom = generateBarrelGeometry(45, 7.0, [knurl('cross')], 10, 10, 8, 8);
+    const r = radiiAt(geom, 22.5);
+    expect(r.length).toBeGreaterThan(0);
+    expect(Math.min(...r)).toBeLessThan(3.4);
+  });
+
+  it('cross は helical より溝が密(逆向き2方向の交差＝ねじれが効いている)', () => {
+    const countGrooved = (type: 'helical' | 'cross'): number => {
+      const geom = generateBarrelGeometry(45, 7.0, [knurl(type)], 10, 10, 8, 8);
+      const pos = geom.getAttribute('position');
+      let grooved = 0;
+      for (let i = 0; i < pos.count; i++) {
+        const bz = -pos.getY(i);
+        if (bz > 11 && bz < 34) {
+          const r = Math.hypot(pos.getX(i), pos.getZ(i));
+          if (r > 2.5 && r < 3.45) grooved++;
+        }
+      }
+      return grooved;
+    };
+    expect(countGrooved('cross')).toBeGreaterThan(countGrooved('helical'));
+  });
+
+  it('ローレットは generateProfile(=物理計算)に影響しない', () => {
+    const withKnurl = generateProfile(45, 7.0, [knurl('cross')], 10, 10);
+    const without = generateProfile(45, 7.0, [], 10, 10);
+    expect(withKnurl).toEqual(without);
+  });
+});

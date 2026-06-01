@@ -149,6 +149,17 @@ describe('generateDxf', () => {
         expect(dxf).not.toContain('vertical');
     });
 
+    it('綾目ローレットはゾーンに KNURL 注記を出す', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 'k1', type: 'cross', startZ: 15, endZ: 30,
+                properties: { depth: 0.4, itemCount: 24, twistDeg: 360 },
+            }],
+        });
+        expect(dxf).toContain('KNURL diamond');
+    });
+
     it('テーパー領域のカットも単一輪郭エンティティ内に収まる (隙間ゼロ保証)', () => {
         const dxf = generateDxf({
             ...baseInput,
