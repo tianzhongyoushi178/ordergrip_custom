@@ -170,17 +170,22 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   removePolygonZone: (id) => set((state) => ({
     polygonZones: state.polygonZones.filter((z) => z.id !== id),
   })),
-  // sides は 5〜11、startZ/endZ は 0〜length にクランプ
+  // sides は 5〜11、startZ/endZ は 0〜length にクランプ。
+  // 開始>終了の逆転は防ぐ (逆転すると区間が空になり多角形が表示されないため)。
   updatePolygonZone: (id, patch) => set((state) => ({
     polygonZones: state.polygonZones.map((z) => {
       if (z.id !== id) return z;
       const merged = { ...z, ...patch };
-      return {
-        ...merged,
-        sides: Math.min(11, Math.max(5, Math.round(merged.sides))),
-        startZ: Math.max(0, Math.min(state.length, merged.startZ)),
-        endZ: Math.max(0, Math.min(state.length, merged.endZ)),
-      };
+      const sides = Math.min(11, Math.max(5, Math.round(merged.sides)));
+      let startZ = Math.max(0, Math.min(state.length, merged.startZ));
+      let endZ = Math.max(0, Math.min(state.length, merged.endZ));
+      if (startZ > endZ) {
+        // 編集した側を相手に合わせる (両方変更時は昇順に並べ替え)
+        if ('startZ' in patch && !('endZ' in patch)) startZ = endZ;
+        else if ('endZ' in patch && !('startZ' in patch)) endZ = startZ;
+        else [startZ, endZ] = [endZ, startZ];
+      }
+      return { ...merged, sides, startZ, endZ };
     }),
   })),
   setAll: (newState) => set((state) => ({ ...state, ...newState })),

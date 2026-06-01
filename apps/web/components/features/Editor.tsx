@@ -502,7 +502,7 @@ export const Editor = () => {
                                                 onChange={(v) => updatePolygonZone(zone.id, { startZ: v })}
                                                 step={0.5}
                                                 min={0}
-                                                max={length}
+                                                max={zone.endZ}
                                                 inputClassName="text-xs"
                                             />
                                         </label>
@@ -512,7 +512,7 @@ export const Editor = () => {
                                                 value={zone.endZ}
                                                 onChange={(v) => updatePolygonZone(zone.id, { endZ: v })}
                                                 step={0.5}
-                                                min={0}
+                                                min={zone.startZ}
                                                 max={length}
                                                 inputClassName="text-xs"
                                             />

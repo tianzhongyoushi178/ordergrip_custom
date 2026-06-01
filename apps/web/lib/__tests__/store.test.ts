@@ -209,6 +209,32 @@ describe('useBarrelStore', () => {
       useBarrelStore.getState().removePolygonZone('p1');
       expect(useBarrelStore.getState().polygonZones[0].id).toBe('p2');
     });
+
+    it('開始>終了の逆転を防ぐ (開始編集時は終了でクランプ)', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      useBarrelStore.getState().updatePolygonZone('p1', { startZ: 30 });
+      const zone = useBarrelStore.getState().polygonZones[0];
+      expect(zone.startZ).toBeLessThanOrEqual(zone.endZ);
+      expect(zone.startZ).toBe(20);
+      expect(zone.endZ).toBe(20);
+    });
+
+    it('開始>終了の逆転を防ぐ (終了編集時は開始でクランプ)', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      useBarrelStore.getState().updatePolygonZone('p1', { endZ: 5 });
+      const zone = useBarrelStore.getState().polygonZones[0];
+      expect(zone.endZ).toBeGreaterThanOrEqual(zone.startZ);
+      expect(zone.startZ).toBe(10);
+      expect(zone.endZ).toBe(10);
+    });
+
+    it('開始・終了を同時に逆転指定した場合は昇順に並べ替える', () => {
+      useBarrelStore.getState().addPolygonZone({ id: 'p1', startZ: 10, endZ: 20, sides: 6 });
+      useBarrelStore.getState().updatePolygonZone('p1', { startZ: 30, endZ: 5 });
+      const zone = useBarrelStore.getState().polygonZones[0];
+      expect(zone.startZ).toBe(5);
+      expect(zone.endZ).toBe(30);
+    });
   });
 
   // =========================================
