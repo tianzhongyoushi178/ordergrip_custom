@@ -211,6 +211,25 @@ describe('storage/local', () => {
       expect(result.polygonZones).toHaveLength(1);
       expect(result.polygonZones![0].sides).toBe(6);
     });
+
+    it('accentColor / colorZones を検証 (不正要素は除外・id 補完)', () => {
+      const result = validateBarrelData({
+        accentColor: '#3A6EA5',
+        colorZones: [
+          { id: 'c1', startZ: 10, endZ: 20 },
+          { startZ: 5, endZ: 8 },        // id なし → 補完
+          { startZ: 'bad', endZ: 8 },     // 不正 → 除外
+        ],
+      });
+      expect(result.accentColor).toBe('#3A6EA5');
+      expect(result.colorZones).toHaveLength(2);
+      expect(result.colorZones!.every((z) => typeof z.id === 'string' && z.id.length > 0)).toBe(true);
+    });
+
+    it('不正な accentColor は無視', () => {
+      const result = validateBarrelData({ accentColor: 'red' });
+      expect(result.accentColor).toBeUndefined();
+    });
   });
 
   // =========================================

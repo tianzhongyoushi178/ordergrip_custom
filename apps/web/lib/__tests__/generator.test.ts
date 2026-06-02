@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { generateProfile, generateBarrelGeometry, polygonSidesAt } from '../math/generator';
-import type { CutZone, PolygonZone } from '../store/useBarrelStore';
+import * as THREE from 'three';
+import { generateProfile, generateBarrelGeometry, polygonSidesAt, isColoredAt } from '../math/generator';
+import type { CutZone, PolygonZone, ColorZone } from '../store/useBarrelStore';
 
 describe('generateProfile', () => {
   // =========================================
@@ -544,5 +545,48 @@ describe('ローレット (helical / cross)', () => {
     const withKnurl = generateProfile(45, 7.0, [knurl('cross')], 10, 10);
     const without = generateProfile(45, 7.0, [], 10, 10);
     expect(withKnurl).toEqual(without);
+  });
+});
+
+describe('isColoredAt', () => {
+  const zones: ColorZone[] = [{ id: 'a', startZ: 10, endZ: 20 }];
+  it('区間内 true / 区間外 false / 境界(開始含む・終了含まない)', () => {
+    expect(isColoredAt(zones, 15)).toBe(true);
+    expect(isColoredAt(zones, 5)).toBe(false);
+    expect(isColoredAt(zones, 10)).toBe(true);
+    expect(isColoredAt(zones, 20)).toBe(false);
+    expect(isColoredAt([], 15)).toBe(false);
+  });
+});
+
+describe('カラーリング (頂点カラー)', () => {
+  it('color 属性が頂点数ぶん存在する', () => {
+    const geom = generateBarrelGeometry(45, 7.0, [], 10, 10, 8, 8);
+    const color = geom.getAttribute('color');
+    expect(color).toBeDefined();
+    expect(color.count).toBe(geom.getAttribute('position').count);
+    expect(color.itemSize).toBe(3);
+  });
+
+  it('区間内の外周頂点は accentColor・区間外はベース色', () => {
+    const accent = '#C0392B'; // RED
+    const zones: ColorZone[] = [{ id: 'c1', startZ: 18, endZ: 27 }];
+    const geom = generateBarrelGeometry(45, 7.0, [], 10, 10, 8, 8, [], 'taper', 'taper', 'smooth', [], zones, accent);
+    const pos = geom.getAttribute('position');
+    const color = geom.getAttribute('color');
+    const accentC = new THREE.Color(accent);
+    const baseC = new THREE.Color('#D1D5DB');
+    const near = (i: number, c: THREE.Color): boolean =>
+      Math.abs(color.getX(i) - c.r) < 1e-3 && Math.abs(color.getY(i) - c.g) < 1e-3 && Math.abs(color.getZ(i) - c.b) < 1e-3;
+
+    let inZone = 0, outZone = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const bz = -pos.getY(i);
+      if (Math.hypot(pos.getX(i), pos.getZ(i)) <= 2.5) continue; // 外周面のみ
+      if (bz > 19 && bz < 26 && near(i, accentC)) inZone++;
+      else if (bz > 12 && bz < 16 && near(i, baseC)) outZone++;
+    }
+    expect(inZone).toBeGreaterThan(0);   // 区間内は accent 着色
+    expect(outZone).toBeGreaterThan(0);  // 区間外は base 金属色
   });
 });

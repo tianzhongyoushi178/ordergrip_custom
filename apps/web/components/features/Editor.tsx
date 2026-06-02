@@ -2,6 +2,7 @@
 
 import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
 import { generateProfile, polygonAreaFactor, polygonSidesAt } from '@/lib/math/generator';
+import { BARREL_COLORS, colorEnName } from '@/lib/colors';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
@@ -133,9 +134,10 @@ export const Editor = () => {
     const {
         length, maxDiameter, materialDensity, cuts,
         frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp,
-        shapeType, frontEndShape, rearEndShape, polygonZones,
+        shapeType, frontEndShape, rearEndShape, polygonZones, colorZones, accentColor,
         updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
-        setAll, setMaterialDensity, addPolygonZone, updatePolygonZone, removePolygonZone, activeCutId, setActiveCutId
+        setAll, setMaterialDensity, addPolygonZone, updatePolygonZone, removePolygonZone,
+        setAccentColor, addColorZone, updateColorZone, removeColorZone, activeCutId, setActiveCutId
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
@@ -569,6 +571,98 @@ export const Editor = () => {
                                 全体を多角形
                             </button>
                         </div>
+                    </div>
+
+                    {/* カラーリング: 1色を選び、複数のZ区間に塗る (区間外はベース金属色) */}
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-medium">カラーリング</label>
+                            <span className="text-[10px] text-zinc-400">1色を区間に</span>
+                        </div>
+
+                        {/* パレット */}
+                        <div className="grid grid-cols-8 gap-1.5 mb-2">
+                            {BARREL_COLORS.map((c) => (
+                                <button
+                                    key={c.hex}
+                                    type="button"
+                                    title={c.name}
+                                    aria-label={c.name}
+                                    onClick={() => setAccentColor(c.hex)}
+                                    className={`aspect-square rounded-full border-2 transition-all ${
+                                        accentColor === c.hex
+                                            ? 'border-blue-600 scale-110'
+                                            : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-400'
+                                    }`}
+                                    style={{ backgroundColor: c.hex }}
+                                />
+                            ))}
+                        </div>
+
+                        {colorZones.length === 0 && (
+                            <p className="text-[11px] text-zinc-400 mb-2">
+                                未設定（全体が金属色）。区間を追加すると、その範囲が選択色になります。
+                            </p>
+                        )}
+
+                        <div className="space-y-2">
+                            {colorZones.map((zone) => (
+                                <div key={zone.id} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-2">
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className="w-4 h-4 rounded-full border border-zinc-300 dark:border-zinc-600 shrink-0"
+                                            style={{ backgroundColor: accentColor }}
+                                        />
+                                        <div className="grid grid-cols-2 gap-2 flex-1">
+                                            <label className="text-[10px] text-zinc-400 block">
+                                                開始 z (mm)
+                                                <NumStepper
+                                                    value={zone.startZ}
+                                                    onChange={(v) => updateColorZone(zone.id, { startZ: v })}
+                                                    step={0.5}
+                                                    min={0}
+                                                    max={zone.endZ}
+                                                    inputClassName="text-xs"
+                                                />
+                                            </label>
+                                            <label className="text-[10px] text-zinc-400 block">
+                                                終了 z (mm)
+                                                <NumStepper
+                                                    value={zone.endZ}
+                                                    onChange={(v) => updateColorZone(zone.id, { endZ: v })}
+                                                    step={0.5}
+                                                    min={zone.startZ}
+                                                    max={length}
+                                                    inputClassName="text-xs"
+                                                />
+                                            </label>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeColorZone(zone.id)}
+                                            className="w-7 h-7 rounded text-zinc-400 hover:text-red-500 flex items-center justify-center shrink-0"
+                                            aria-label="カラー区間を削除"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => addColorZone({
+                                id: Math.random().toString(36).substr(2, 9),
+                                startZ: Math.round((length / 3) * 10) / 10,
+                                endZ: Math.round((length * 2 / 3) * 10) / 10,
+                            })}
+                            className="mt-2 w-full py-2 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-bold text-zinc-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+                        >
+                            ＋ カラー区間を追加
+                        </button>
                     </div>
 
                     {shapeType === 'custom' && (
@@ -1097,6 +1191,7 @@ export const Editor = () => {
                                 outline, outlineInterp,
                                 frontEndShape, rearEndShape,
                                 materialDensity, polygonZones,
+                                colorZones, accentColorName: colorEnName(accentColor),
                             };
                             const result = await shareDxf(dxfInput);
                             if (result.status === 'failed') {

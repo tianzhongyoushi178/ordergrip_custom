@@ -1,4 +1,4 @@
-import { BarrelState, PolygonZone } from '@/lib/store/useBarrelStore';
+import { BarrelState, PolygonZone, ColorZone } from '@/lib/store/useBarrelStore';
 
 export const STORAGE_KEY = 'dart-barrel-design';
 
@@ -17,6 +17,8 @@ export const saveToLocalStorage = (state: Partial<BarrelState>) => {
         frontEndShape: state.frontEndShape,
         rearEndShape: state.rearEndShape,
         polygonZones: state.polygonZones,
+        accentColor: state.accentColor,
+        colorZones: state.colorZones,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
@@ -100,6 +102,26 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
             typeof c.id === 'string' && typeof c.type === 'string' &&
             isFiniteNumber(c.startZ) && isFiniteNumber(c.endZ)
         );
+    }
+
+    // アクセント色 (#RRGGBB) とカラー区間
+    if (typeof raw.accentColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw.accentColor)) {
+        result.accentColor = raw.accentColor;
+    }
+    if (Array.isArray(raw.colorZones)) {
+        const czones: ColorZone[] = [];
+        raw.colorZones.forEach((z, i) => {
+            if (typeof z !== 'object' || z === null) return;
+            const r = z as Record<string, unknown>;
+            if (!isFiniteNumber(r.startZ) || !isFiniteNumber(r.endZ)) return;
+            if (r.startZ >= r.endZ) return; // 逆転・ゼロ幅区間は除外 (着色が無音で消えるのを防ぐ)
+            czones.push({
+                id: typeof r.id === 'string' ? r.id : `cz-${i}`,
+                startZ: r.startZ,
+                endZ: r.endZ,
+            });
+        });
+        result.colorZones = czones;
     }
 
     return result;

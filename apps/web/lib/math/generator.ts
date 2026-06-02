@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CutZone, EndShape, OutlineInterp, PolygonZone } from '../store/useBarrelStore';
+import { CutZone, EndShape, OutlineInterp, PolygonZone, ColorZone } from '../store/useBarrelStore';
 
 /**
  * アウトラインの d(z) を制御点間で補間する。
@@ -323,6 +323,14 @@ export const polygonSidesAt = (zones: PolygonZone[], z: number): number => {
     return 0;
 };
 
+/** z がいずれかのカラー区間内なら true (外周面の着色判定に使う)。 */
+export const isColoredAt = (zones: ColorZone[], z: number): boolean => {
+    for (const zone of zones) {
+        if (z >= zone.startZ && z < zone.endZ) return true;
+    }
+    return false;
+};
+
 export const generateBarrelGeometry = (
     length: number,
     maxDiameter: number,
@@ -336,6 +344,8 @@ export const generateBarrelGeometry = (
     rearEndShape: EndShape = 'taper',
     outlineInterp: OutlineInterp = 'smooth',
     polygonZones: PolygonZone[] = [],
+    colorZones: ColorZone[] = [],
+    accentColor: string = '#D1D5DB',
 ): THREE.BufferGeometry => {
     // 1. Get Base Profile (Outer surface only)
     const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
@@ -459,6 +469,10 @@ export const generateBarrelGeometry = (
     const vertices: number[] = [];
     const indices: number[] = [];
     const uvs: number[] = [];
+    const colors: number[] = [];
+    // 頂点カラー: ベース金属色 / アクセント色を THREE.Color で sRGB→linear 変換して焼き込む
+    const baseColor = new THREE.Color('#D1D5DB');
+    const accent = new THREE.Color(accentColor);
 
     // Generate Vertices
     for (let i = 0; i < points.length; i++) {
@@ -501,6 +515,8 @@ export const generateBarrelGeometry = (
         const envR = sectionSides >= 5 ? envRAt(y) : rBase;
         const cutDepth = sectionSides >= 5 ? Math.max(0, envR - rBase) : 0;
         const polyWeight = sectionSides >= 5 ? Math.max(0, 1 - cutDepth / 0.05) : 0;
+        // 外周面かつカラー区間内なら accentColor、それ以外はベース金属色で着色
+        const sectionColored = isOuterSurface && isColoredAt(colorZones, y);
 
         for (let jc = 0; jc < cols; jc++) {
             const { theta, u } = ring[jc];
@@ -599,9 +615,13 @@ export const generateBarrelGeometry = (
 
             // UVs
             uvs.push(u);
-            // Map V based on distance along the profile path could be better, 
+            // Map V based on distance along the profile path could be better,
             // but simple i/segments is okay for basic metal texture.
             uvs.push(1 - (i / heightSegments));
+
+            // 頂点カラー (外周面のカラー区間のみ accent、それ以外はベース金属色)
+            const col = sectionColored ? accent : baseColor;
+            colors.push(col.r, col.g, col.b);
         }
     }
 
@@ -624,6 +644,7 @@ export const generateBarrelGeometry = (
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 

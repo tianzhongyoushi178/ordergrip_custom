@@ -19,8 +19,9 @@
  */
 
 import { DxfWriter, Colors, point2d, point3d, Units, LWPolylineFlags } from '@tarikjabiri/dxf';
-import type { BarrelState, CutZone, PolygonZone } from '@/lib/store/useBarrelStore';
+import type { BarrelState, CutZone, PolygonZone, ColorZone } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
+import { captureBarrelPngBlob } from './capture';
 
 const HOLE_RADIUS = 2.1;
 const EPSILON = 1e-6;
@@ -43,8 +44,11 @@ const LINE_OA_BASIC_ID = process.env.NEXT_PUBLIC_LINE_OA_BASIC_ID ?? '@750pfpxc'
  * 転送するため、ブラウザ直結時に発生する CORS 制約と User-Agent ブロックを回避する。
  * デフォルトで 30 日後に自動削除される。
  */
-export const uploadDxfTemp = async (dxfContent: string, filename: string): Promise<string> => {
-    const blob = new Blob([dxfContent], { type: 'application/dxf' });
+/**
+ * 任意のファイル(Blob)を /api/upload-dxf 経由で一時ホストにアップロードし、
+ * ダウンロード強制プロキシ url と、ホスト生 url(rawUrl=インライン表示向き) を返す。
+ */
+export const uploadFileTemp = async (blob: Blob, filename: string): Promise<{ url: string; rawUrl: string }> => {
     const formData = new FormData();
     formData.append('file', blob, filename);
 
@@ -68,7 +72,14 @@ export const uploadDxfTemp = async (dxfContent: string, filename: string): Promi
     if (typeof body.url !== 'string' || !body.url.startsWith('http')) {
         throw new Error(`予期しないレスポンス: ${JSON.stringify(body).slice(0, 200)}`);
     }
-    return body.url;
+    const rawUrl = typeof body.rawUrl === 'string' && body.rawUrl.startsWith('http') ? body.rawUrl : body.url;
+    return { url: body.url, rawUrl };
+};
+
+/** DXF 文字列を一時ホストにアップロードし、ダウンロード強制プロキシ URL を返す(後方互換) */
+export const uploadDxfTemp = async (dxfContent: string, filename: string): Promise<string> => {
+    const blob = new Blob([dxfContent], { type: 'application/dxf' });
+    return (await uploadFileTemp(blob, filename)).url;
 };
 
 /**
@@ -99,6 +110,10 @@ interface DxfBarrelInput {
     materialDensity: number;
     /** 多角形ゾーン: 指定区間の断面を正多角形に (対角=最大径)。空/未指定 = 全長真円 */
     polygonZones?: PolygonZone[];
+    /** カラー区間: 指定区間に accentColorName のアルマイト色を塗る */
+    colorZones?: ColorZone[];
+    /** アクセント色の名称 (DXF 注記用)。例 'GOLD' */
+    accentColorName?: string;
 }
 
 const materialName = (density: number): string => {
@@ -207,6 +222,7 @@ export const generateDxf = (input: DxfBarrelInput): string => {
     dxf.addLayer('DIM', Colors.Yellow, 'Continuous');
     dxf.addLayer('CUT_LABEL', Colors.Green, 'Continuous');
     dxf.addLayer('SECTION', Colors.Magenta, 'Continuous');
+    dxf.addLayer('COLOR', Colors.Blue, 'Continuous');
 
     const baseR = input.maxDiameter / 2;
     const length = input.length;
@@ -604,6 +620,28 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         );
     });
 
+    // ============================================================
+    // 10. カラー区間 (COLOR レイヤー注記) — アルマイト塗装指示
+    //     周方向の塗装なので側面輪郭には出さず、バレル上部にブラケット注記を描く
+    // ============================================================
+    const cZones = input.colorZones ?? [];
+    if (cZones.length > 0 && input.accentColorName) {
+        const cBot = baseR + 6;
+        const cTop = baseR + 9;
+        for (const cz of cZones) {
+            const midZ = (cz.startZ + cz.endZ) / 2;
+            dxf.addLine(point3d(cz.startZ, cBot, 0), point3d(cz.startZ, cTop, 0), { layerName: 'COLOR' });
+            dxf.addLine(point3d(cz.endZ, cBot, 0), point3d(cz.endZ, cTop, 0), { layerName: 'COLOR' });
+            dxf.addLine(point3d(cz.startZ, cTop, 0), point3d(cz.endZ, cTop, 0), { layerName: 'COLOR' });
+            dxf.addText(
+                point3d(midZ - 6, cTop + 0.5, 0),
+                1.8,
+                `COLOR ${input.accentColorName} z${cz.startZ.toFixed(0)}-${cz.endZ.toFixed(0)}`,
+                { layerName: 'COLOR' },
+            );
+        }
+    }
+
     return dxf.stringify();
 };
 
@@ -665,46 +703,64 @@ export type ShareResult =
 export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promise<ShareResult> => {
     const dxf = generateDxf(input);
     const name = filename ?? buildFilename();
+    const imageName = name.replace(/\.dxf$/i, '.png');
 
-    // 1. アップロード
-    let url: string;
+    // 1. DXF をアップロード (必須)
+    const dxfBlob = new Blob([dxf], { type: 'application/dxf' });
+    let dxfUrl: string;
     try {
-        url = await uploadDxfTemp(dxf, name);
+        dxfUrl = (await uploadFileTemp(dxfBlob, name)).url;
     } catch (err) {
         return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
     }
 
-    const message = `ORDER GRIP バレル設計データ\n${url}`;
+    // 2. 3D レンダー画像をキャプチャしてアップロード (任意・失敗しても DXF だけで続行)
+    //    画像はインライン表示させたいのでホスト生 URL(rawUrl) を使う。
+    const imageBlob = captureBarrelPngBlob();
+    let imageUrl: string | null = null;
+    if (imageBlob) {
+        try {
+            imageUrl = (await uploadFileTemp(imageBlob, imageName)).rawUrl;
+        } catch {
+            imageUrl = null;
+        }
+    }
 
-    // 2. Basic ID で公式アカウントのチャットを直接開く (送付先選択不要)
+    const message = imageUrl
+        ? `ORDER GRIP バレル設計のご相談\n■3Dイメージ: ${imageUrl}\n■DXF: ${dxfUrl}`
+        : `ORDER GRIP バレル設計のご相談\n■DXF: ${dxfUrl}`;
+
+    // 3. Basic ID で公式アカウントのチャットを直接開く (送付先選択不要、画像+DXF の URL 入り)
     if (LINE_OA_BASIC_ID) {
         const link = buildLineDeepLink(message);
         window.open(link, '_blank', 'noopener,noreferrer');
-        return { status: 'auto-line', url };
+        return { status: 'auto-line', url: dxfUrl };
     }
 
-    // 3. フォールバック: Web Share API
+    // 4. フォールバック: Web Share API (可能なら DXF + 画像の両ファイルを添付)
     const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+    const files: File[] = [new File([dxfBlob], name, { type: 'application/dxf' })];
+    if (imageBlob) files.push(new File([imageBlob], imageName, { type: 'image/png' }));
     if (typeof nav.share === 'function') {
         try {
-            await nav.share({
-                title: 'ORDER GRIP バレル設計DXF',
-                text: message,
-                url,
-            });
-            return { status: 'url-share', url };
+            if (nav.canShare?.({ files })) {
+                await nav.share({ title: 'ORDER GRIP バレル設計', text: message, files });
+                return { status: 'file-share' };
+            }
+            await nav.share({ title: 'ORDER GRIP バレル設計', text: message, url: dxfUrl });
+            return { status: 'url-share', url: dxfUrl };
         } catch (err) {
             if ((err as Error).name === 'AbortError') {
-                return { status: 'url-share', url };
+                return { status: 'url-share', url: dxfUrl };
             }
         }
     }
 
-    // 4. クリップボードコピー + 友だち追加ページ
+    // 5. クリップボードコピー + 友だち追加ページ
     try {
         await navigator.clipboard.writeText(message);
     } catch {
         // clipboard 失敗は致命的ではない
     }
-    return { status: 'clipboard', url };
+    return { status: 'clipboard', url: dxfUrl };
 };

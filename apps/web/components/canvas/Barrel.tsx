@@ -28,14 +28,14 @@ const CutHighlight = ({ startZ, endZ, length, maxDiameter }: {
 };
 
 export const Barrel = () => {
-    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones, activeCutId } = useBarrelStore();
+    const { length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones, colorZones, accentColor, activeCutId } = useBarrelStore();
 
     const geometry = useMemo(() => {
-        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape, outlineInterp, polygonZones);
+        const geom = generateBarrelGeometry(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, frontEndShape, rearEndShape, outlineInterp, polygonZones, colorZones, accentColor);
         geom.rotateX(-Math.PI / 2);
         geom.translate(0, 0, -length / 2);
         return geom;
-    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones]);
+    }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones, colorZones, accentColor]);
 
     // 古いBufferGeometryのGPUバッファを解放する。スマホで連続スライダー操作中に
     // WebGLコンテキストが失われ、Canvasがremountして初期画面に戻る現象を防ぐ。
@@ -51,7 +51,8 @@ export const Barrel = () => {
         <group>
             <mesh geometry={geometry} castShadow receiveShadow>
                 <meshStandardMaterial
-                    color="#D1D5DB"
+                    color="#ffffff"
+                    vertexColors
                     roughness={0.3}
                     metalness={0.8}
                     side={THREE.DoubleSide}

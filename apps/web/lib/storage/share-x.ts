@@ -22,6 +22,8 @@
  * ※ Canvas は `preserveDrawingBuffer: true` (Scene.tsx で設定済み)。
  */
 
+import { dataUrlToBlobSync } from './capture';
+
 export const X_POST_TEXT =
     '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP';
 
@@ -50,19 +52,6 @@ const detectPlatform = (): Platform => {
     if (isIOS) return 'ios';
     if (/Android/.test(ua)) return 'android';
     return 'desktop';
-};
-
-/** dataURL (data:image/png;base64,xxx) を同期で Blob に変換 */
-const dataUrlToBlobSync = (dataUrl: string): Blob => {
-    const commaIdx = dataUrl.indexOf(',');
-    const meta = dataUrl.slice(0, commaIdx);
-    const data = dataUrl.slice(commaIdx + 1);
-    const mimeMatch = meta.match(/data:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
-    const bytes = atob(data);
-    const buf = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
-    return new Blob([buf], { type: mime });
 };
 
 /** クリップボードへ画像コピーを試行 (fire-and-forget)。成功可否を Boolean で返す Promise を返却 */

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_ACCENT_COLOR } from '../colors';
 
 export type CutType =
   | 'ring' | 'ring_double' | 'ring_triple'
@@ -35,6 +36,13 @@ export interface PolygonZone {
   sides: number;  // 5〜11
 }
 
+/** 指定 Z 区間にアクセント色を塗るカラーゾーン (色は accentColor で共通)。 */
+export interface ColorZone {
+  id: string;
+  startZ: number; // mm from front
+  endZ: number;   // mm from front
+}
+
 export interface OutlinePoint {
   z: number; // Distance from front (mm)
   d: number; // Diameter (mm)
@@ -61,6 +69,10 @@ export interface BarrelState {
   // 多角形ゾーン: 指定 Z 区間の断面を正多角形に (空 = 全長真円)
   polygonZones: PolygonZone[];
 
+  // カラーリング: accentColor(1色) を colorZones(複数Z区間)に塗る (区間外はベース金属色)
+  accentColor: string;
+  colorZones: ColorZone[];
+
   // Material
   materialDensity: number; // g/cm3
 
@@ -84,6 +96,10 @@ export interface BarrelState {
   addPolygonZone: (zone: PolygonZone) => void;
   removePolygonZone: (id: string) => void;
   updatePolygonZone: (id: string, patch: Partial<PolygonZone>) => void;
+  setAccentColor: (hex: string) => void;
+  addColorZone: (zone: ColorZone) => void;
+  removeColorZone: (id: string) => void;
+  updateColorZone: (id: string, patch: Partial<ColorZone>) => void;
   setAll: (state: Partial<BarrelState>) => void;
 
   // Camera Control
@@ -128,6 +144,8 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   outline: [],
   outlineInterp: 'smooth',
   polygonZones: [],
+  accentColor: DEFAULT_ACCENT_COLOR,
+  colorZones: [],
   cuts: [],
 
   // 寸法変更は taper ベースの形状を維持。明示的な「カスタム」ボタン押下でのみ outline モードに移行。
@@ -187,6 +205,26 @@ export const useBarrelStore = create<BarrelState>((set) => ({
         else [startZ, endZ] = [endZ, startZ];
       }
       return { ...merged, sides, startZ, endZ };
+    }),
+  })),
+  setAccentColor: (hex) => set({ accentColor: hex }),
+  addColorZone: (zone) => set((state) => ({ colorZones: [...state.colorZones, zone] })),
+  removeColorZone: (id) => set((state) => ({
+    colorZones: state.colorZones.filter((z) => z.id !== id),
+  })),
+  // startZ/endZ を 0〜length にクランプ＋逆転防止 (多角形ゾーンと同じ)
+  updateColorZone: (id, patch) => set((state) => ({
+    colorZones: state.colorZones.map((z) => {
+      if (z.id !== id) return z;
+      const merged = { ...z, ...patch };
+      let startZ = Math.max(0, Math.min(state.length, merged.startZ));
+      let endZ = Math.max(0, Math.min(state.length, merged.endZ));
+      if (startZ > endZ) {
+        if ('startZ' in patch && !('endZ' in patch)) startZ = endZ;
+        else if ('endZ' in patch && !('startZ' in patch)) endZ = startZ;
+        else [startZ, endZ] = [endZ, startZ];
+      }
+      return { ...merged, startZ, endZ };
     }),
   })),
   setAll: (newState) => set((state) => ({ ...state, ...newState })),

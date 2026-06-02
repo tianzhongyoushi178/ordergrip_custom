@@ -160,6 +160,15 @@ describe('generateDxf', () => {
         expect(dxf).toContain('KNURL diamond');
     });
 
+    it('カラー区間は COLOR 注記を出す', () => {
+        const dxf = generateDxf({
+            ...baseInput,
+            colorZones: [{ id: 'c1', startZ: 15, endZ: 30 }],
+            accentColorName: 'GOLD',
+        });
+        expect(dxf).toContain('COLOR GOLD');
+    });
+
     it('テーパー領域のカットも単一輪郭エンティティ内に収まる (隙間ゼロ保証)', () => {
         const dxf = generateDxf({
             ...baseInput,

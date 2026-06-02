@@ -238,6 +238,38 @@ describe('useBarrelStore', () => {
   });
 
   // =========================================
+  // カラーリング操作
+  // =========================================
+  describe('カラーリング操作', () => {
+    beforeEach(() => {
+      useBarrelStore.setState({ colorZones: [], accentColor: '#C9A227', length: 45 });
+    });
+
+    it('アクセント色を設定する', () => {
+      useBarrelStore.getState().setAccentColor('#3A6EA5');
+      expect(useBarrelStore.getState().accentColor).toBe('#3A6EA5');
+    });
+
+    it('カラー区間を追加/削除する', () => {
+      useBarrelStore.getState().addColorZone({ id: 'c1', startZ: 10, endZ: 20 });
+      expect(useBarrelStore.getState().colorZones).toHaveLength(1);
+      useBarrelStore.getState().removeColorZone('c1');
+      expect(useBarrelStore.getState().colorZones).toHaveLength(0);
+    });
+
+    it('startZ/endZ を 0〜length にクランプ＋逆転防止', () => {
+      useBarrelStore.getState().addColorZone({ id: 'c1', startZ: 10, endZ: 20 });
+      useBarrelStore.getState().updateColorZone('c1', { startZ: 30 });
+      let z = useBarrelStore.getState().colorZones[0];
+      expect(z.startZ).toBeLessThanOrEqual(z.endZ);
+      expect(z.startZ).toBe(20);
+      useBarrelStore.getState().updateColorZone('c1', { endZ: 999 });
+      z = useBarrelStore.getState().colorZones[0];
+      expect(z.endZ).toBe(45);
+    });
+  });
+
+  // =========================================
   // setAll
   // =========================================
   describe('setAll', () => {
