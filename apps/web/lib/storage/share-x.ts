@@ -23,6 +23,7 @@
  */
 
 import { dataUrlToBlobSync } from './capture';
+import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 export const X_POST_TEXT =
     '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP';
@@ -77,18 +78,43 @@ const buildAndroidIntentUri = (text: string, webFallbackUrl: string): string =>
     `#Intent;scheme=twitter;package=com.twitter.android;` +
     `S.browser_fallback_url=${encodeURIComponent(webFallbackUrl)};end`;
 
-const openMobileIntent = (platform: 'ios' | 'android', webFallbackUrl: string): void => {
+const openMobileIntent = (platform: 'ios' | 'android', text: string, webFallbackUrl: string): void => {
     if (platform === 'ios') {
-        window.location.href = buildIOSAppUrl(X_POST_TEXT);
+        window.location.href = buildIOSAppUrl(text);
     } else {
-        window.location.href = buildAndroidIntentUri(X_POST_TEXT, webFallbackUrl);
+        window.location.href = buildAndroidIntentUri(text, webFallbackUrl);
     }
 };
+
+/**
+ * 描画完了を待つ。triggerCameraReset → React コミット → Scene の effect(camera.update)
+ * → R3F 再描画 を確実に跨ぐため数フレーム + 余白で待つ。RAF 不在時は setTimeout で代替。
+ */
+const waitForRender = (): Promise<void> => new Promise((resolve) => {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame === 'undefined') {
+        setTimeout(resolve, 80);
+        return;
+    }
+    let n = 0;
+    const tick = () => {
+        if (++n >= 3) setTimeout(resolve, 16);
+        else window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+});
 
 export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
         return { status: 'failed', error: 'canvas not found' };
+    }
+
+    // 初期の画角でスクリーンショットを撮るため、カメラを初期位置にリセットして描画完了を待つ
+    try {
+        useBarrelStore.getState().triggerCameraReset();
+        await waitForRender();
+    } catch {
+        // リセットに失敗してもキャプチャは続行する
     }
 
     let dataUrl: string;
@@ -103,8 +129,11 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     }
 
     const blob = dataUrlToBlobSync(dataUrl);
-    const shareUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
-    const webUrl = buildXIntentUrl(X_POST_TEXT, shareUrl);
+    // 投稿本文にアプリ URL を含める。URL を落とすモバイルアプリ intent でも本文に入るよう、
+    // url パラメータではなく本文に直接付加する (X は本文中の URL を自動リンク化する)。
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const postText = appUrl ? `${X_POST_TEXT}\n${appUrl}` : X_POST_TEXT;
+    const webUrl = buildXIntentUrl(postText);
     const platform = detectPlatform();
 
     // (1) 画像を同期でローカルにダウンロード (最終フォールバック)
@@ -131,24 +160,23 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
         try {
             await navigator.share({
                 files: [file],
-                text: X_POST_TEXT,
-                ...(shareUrl ? { url: shareUrl } : {}),
+                text: postText,
             });
             return { status: 'opened' };
         } catch (err) {
             // ユーザーがシェアシートをキャンセル / その他エラー
             // → X アプリへ intent URL で直接遷移 (画像はクリップボードからペーストで添付)
             if (err instanceof Error && err.name === 'AbortError') {
-                openMobileIntent(platform, webUrl);
+                openMobileIntent(platform, postText, webUrl);
                 return { status: 'opened' };
             }
             // 想定外のエラーでも一応 intent URL で X を開く
-            openMobileIntent(platform, webUrl);
+            openMobileIntent(platform, postText, webUrl);
             return { status: 'opened' };
         }
     }
 
     // (5) Web Share API が使えないモバイル: intent URL のみ
-    openMobileIntent(platform, webUrl);
+    openMobileIntent(platform, postText, webUrl);
     return { status: 'opened' };
 };
