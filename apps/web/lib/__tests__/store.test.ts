@@ -270,6 +270,45 @@ describe('useBarrelStore', () => {
   });
 
   // =========================================
+  // Undo (ひとつ戻る)
+  // =========================================
+  describe('Undo', () => {
+    beforeEach(() => {
+      // 履歴をクリア (subscribe による直前の記録を消す)
+      useBarrelStore.setState({ past: [], length: 45, maxDiameter: 7.0, cuts: [], colorZones: [], polygonZones: [] });
+      useBarrelStore.setState({ past: [] });
+    });
+
+    it('設計変更後に undo で元に戻る', () => {
+      useBarrelStore.getState().updateDimension('maxDiameter', 9.0);
+      expect(useBarrelStore.getState().maxDiameter).toBe(9.0);
+      expect(useBarrelStore.getState().past.length).toBeGreaterThan(0);
+      useBarrelStore.getState().undo();
+      expect(useBarrelStore.getState().maxDiameter).toBe(7.0);
+    });
+
+    it('cuts の変更も undo で戻る', () => {
+      useBarrelStore.getState().addCut({ id: 'u1', type: 'ring', startZ: 10, endZ: 20, properties: { pitch: 1.0, depth: 0.5 } });
+      expect(useBarrelStore.getState().cuts).toHaveLength(1);
+      useBarrelStore.getState().undo();
+      expect(useBarrelStore.getState().cuts).toHaveLength(0);
+    });
+
+    it('履歴が無いとき undo は何もしない', () => {
+      const before = useBarrelStore.getState().maxDiameter;
+      useBarrelStore.getState().undo();
+      expect(useBarrelStore.getState().maxDiameter).toBe(before);
+      expect(useBarrelStore.getState().past).toHaveLength(0);
+    });
+
+    it('カメラ/アクティブカット等の一過性変更は履歴に積まれない', () => {
+      useBarrelStore.getState().triggerCameraReset();
+      useBarrelStore.getState().setActiveCutId('x');
+      expect(useBarrelStore.getState().past).toHaveLength(0);
+    });
+  });
+
+  // =========================================
   // setAll
   // =========================================
   describe('setAll', () => {

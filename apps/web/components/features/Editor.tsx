@@ -137,7 +137,7 @@ export const Editor = () => {
         shapeType, frontEndShape, rearEndShape, polygonZones, colorZones, accentColor,
         updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
         setAll, setMaterialDensity, addPolygonZone, updatePolygonZone, removePolygonZone,
-        setAccentColor, addColorZone, updateColorZone, removeColorZone, activeCutId, setActiveCutId
+        setAccentColor, addColorZone, updateColorZone, removeColorZone, undo, past, activeCutId, setActiveCutId
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
@@ -322,12 +322,25 @@ export const Editor = () => {
             <div className="overflow-y-auto h-full px-4 sm:px-6 py-6 pb-24 md:pb-6 overscroll-contain">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-xl font-bold">バレルスペック設定</h1>
-                    <button
-                        onClick={() => setShowWizard(true)}
-                        className="text-[10px] bg-zinc-200 dark:bg-zinc-800 px-2 py-1 rounded hover:opacity-80 transition-opacity"
-                    >
-                        再ヒアリング
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => undo()}
+                            disabled={past.length === 0}
+                            title="ひとつ戻る"
+                            data-testid="undo-button"
+                            className="text-[10px] flex items-center gap-1 bg-zinc-200 dark:bg-zinc-800 px-2 py-1 rounded hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h11a4 4 0 014 4v3" /></svg>
+                            元に戻す
+                        </button>
+                        <button
+                            onClick={() => setShowWizard(true)}
+                            className="text-[10px] bg-zinc-200 dark:bg-zinc-800 px-2 py-1 rounded hover:opacity-80 transition-opacity"
+                        >
+                            再ヒアリング
+                        </button>
+                    </div>
                 </div>
 
                 {/* Wizard Overlay */}

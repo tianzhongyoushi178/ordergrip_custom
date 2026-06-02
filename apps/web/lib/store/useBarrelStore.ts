@@ -73,6 +73,9 @@ export interface BarrelState {
   accentColor: string;
   colorZones: ColorZone[];
 
+  // Undo 履歴 (設計フィールドのスナップショット。末尾が直近の変更前)
+  past: DesignSnapshot[];
+
   // Material
   materialDensity: number; // g/cm3
 
@@ -100,6 +103,8 @@ export interface BarrelState {
   addColorZone: (zone: ColorZone) => void;
   removeColorZone: (id: string) => void;
   updateColorZone: (id: string, patch: Partial<ColorZone>) => void;
+  /** 直近の設計変更をひとつ取り消す (履歴が無ければ何もしない)。 */
+  undo: () => void;
   setAll: (state: Partial<BarrelState>) => void;
 
   // Camera Control
@@ -110,6 +115,31 @@ export interface BarrelState {
   activeCutId: string | null;
   setActiveCutId: (id: string | null) => void;
 }
+
+/** Undo 対象の設計フィールド (camera/activeCut/past 等の一過性状態は除外)。 */
+export const DESIGN_KEYS = [
+  'length', 'maxDiameter', 'frontTaperLength', 'rearTaperLength', 'shapeType',
+  'frontEndShape', 'rearEndShape', 'outline', 'outlineInterp', 'polygonZones',
+  'accentColor', 'colorZones', 'materialDensity', 'holeDepthFront', 'holeDepthRear', 'cuts',
+] as const;
+
+export type DesignSnapshot = Pick<BarrelState, (typeof DESIGN_KEYS)[number]>;
+
+const pickDesign = (s: BarrelState): DesignSnapshot => {
+  const out: Partial<DesignSnapshot> = {};
+  for (const k of DESIGN_KEYS) (out as Record<string, unknown>)[k] = s[k];
+  return out as DesignSnapshot;
+};
+
+/** 設計フィールドを参照等価で比較 (immutable 更新前提なので配列/オブジェクトは参照比較で十分)。 */
+const designEqual = (a: DesignSnapshot, b: DesignSnapshot): boolean =>
+  DESIGN_KEYS.every((k) => a[k] === b[k]);
+
+// Undo 履歴記録用の内部フラグ (subscribe と undo で共有)
+let isUndoing = false;
+let lastEditAt = 0;
+const HISTORY_LIMIT = 60;
+const COALESCE_MS = 400; // この間隔以内の連続変更は1ステップにまとめる(スライダードラッグ対策)
 
 /** 現在の taper パラメータから初期 outline を 5 点で生成 */
 const initialOutlineFromTaper = (
@@ -130,7 +160,7 @@ const initialOutlineFromTaper = (
   ];
 };
 
-export const useBarrelStore = create<BarrelState>((set) => ({
+export const useBarrelStore = create<BarrelState>((set, get) => ({
   length: 45.0, // mm
   maxDiameter: 7.0, // mm
   materialDensity: 17.0, // 90% Tungsten default
@@ -146,6 +176,7 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   polygonZones: [],
   accentColor: DEFAULT_ACCENT_COLOR,
   colorZones: [],
+  past: [],
   cuts: [],
 
   // 寸法変更は taper ベースの形状を維持。明示的な「カスタム」ボタン押下でのみ outline モードに移行。
@@ -227,6 +258,14 @@ export const useBarrelStore = create<BarrelState>((set) => ({
       return { ...merged, startZ, endZ };
     }),
   })),
+  undo: () => {
+    const s = get();
+    if (s.past.length === 0) return;
+    const prev = s.past[s.past.length - 1];
+    isUndoing = true; // 復元中は履歴記録を抑止 (subscribe 参照)
+    set({ ...prev, past: s.past.slice(0, -1) });
+    isUndoing = false;
+  },
   setAll: (newState) => set((state) => ({ ...state, ...newState })),
 
   cameraResetTrigger: 0,
@@ -235,3 +274,25 @@ export const useBarrelStore = create<BarrelState>((set) => ({
   activeCutId: null,
   setActiveCutId: (id) => set({ activeCutId: id }),
 }));
+
+// --- Undo 履歴の記録 ---
+// 設計フィールドが変わるたびに「変更前」のスナップショットを past に積む。
+// camera/activeCut/past 等の一過性状態は DESIGN_KEYS に無いので記録対象外。
+// COALESCE_MS 以内の連続変更 (スライダードラッグ等) は1ステップにまとめる。
+let prevDesign = pickDesign(useBarrelStore.getState());
+useBarrelStore.subscribe((state) => {
+  if (isUndoing) {
+    prevDesign = pickDesign(state);
+    return;
+  }
+  const nextDesign = pickDesign(state);
+  if (designEqual(prevDesign, nextDesign)) return;
+  const captured = prevDesign;
+  prevDesign = nextDesign;
+  const now = Date.now();
+  const coalesce = now - lastEditAt < COALESCE_MS;
+  lastEditAt = now;
+  // 連続編集中(coalesce)は新規エントリを積まない。ただし past が空なら必ず1件は積む。
+  if (coalesce && useBarrelStore.getState().past.length > 0) return;
+  useBarrelStore.setState((s) => ({ past: [...s.past, captured].slice(-HISTORY_LIMIT) }));
+});
