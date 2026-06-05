@@ -239,7 +239,7 @@ export const Editor = () => {
                 properties: {
                     depth,
                     itemCount: itemCount ?? 24,
-                    grooveFraction: 0.5,
+                    grooveFraction: 0.25,
                     twistDeg: userParams?.twistDeg ?? 360,
                 },
             });
