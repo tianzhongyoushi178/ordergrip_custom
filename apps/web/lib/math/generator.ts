@@ -83,6 +83,93 @@ const endRadius = (
     return endR + (baseR - endR) * t;
 };
 
+// ローレット/スパイラル/縦溝の円周方向分割数。3D生成(generateBarrelGeometry)と
+// プロファイルのZ分解能(generateProfile)で共有し、斜め溝の段差幅(=列間隔)を一致させる。
+// 本数が少ないと従来は分割が粗く(6×本数/溝幅比)、太い斜め溝の縁が階段状に目立った。
+// 下限 KNURL_RADIAL_MIN を設けて本数が少なくても円筒・斜め溝を滑らかに保つ。
+const KNURL_MIN_VERTS_PER_GROOVE = 6;
+const KNURL_MIN_GROOVE_FRACTION = 0.05;
+const KNURL_RADIAL_MIN = 384;   // 円周分割の下限(段差幅を細かく＝滑らかに保つ。性能との両立で384)
+const KNURL_RADIAL_MAX = 1024;  // 上限(性能ガード)
+
+/** ローレット系カット(縦溝/斜目/綾目)があるときの円周方向分割数。無ければ 0。 */
+const knurlRadialSegments = (cuts: CutZone[]): number => {
+    const knurlCuts = cuts.filter(
+        (c) => c.type === 'vertical' || c.type === 'helical' || c.type === 'cross',
+    );
+    if (knurlCuts.length === 0) return 0;
+    let required = KNURL_RADIAL_MIN;
+    let maxVCount = 0;
+    for (const k of knurlCuts) {
+        const count = Math.max(1, k.properties.itemCount ?? 12);
+        const gf = Math.max(KNURL_MIN_GROOVE_FRACTION, k.properties.grooveFraction ?? 0.5);
+        required = Math.max(required, Math.ceil((count * KNURL_MIN_VERTS_PER_GROOVE) / gf));
+        if (count > maxVCount) maxVCount = count;
+    }
+    // 溝本数の倍数に揃える(本数で割り切れないと溝位置がエイリアスするため)
+    const rs = maxVCount > 0 ? Math.ceil(required / maxVCount) * maxVCount : required;
+    return Math.min(rs, KNURL_RADIAL_MAX);
+};
+
+/**
+ * 3Dメッシュ用に、ねじれローレット/スパイラル(helical/cross)の区間だけ Z サンプルを
+ * 細かくした z 値の配列を返す。斜め溝が「円周×Z」格子に対し斜行して階段状(ギザギザ)に
+ * なるのを抑える。段差幅は円周分割の列間隔(2π/radialSeg)で決まるので、1ステップで溝が
+ * 動く量がその ~1列以下になるよう刻みを決める。ねじれが無ければ null(=一様で良い)。
+ *
+ * @param radialSeg 円周方向分割数(knurlRadialSegments の戻り値)
+ * @param baseRes   ねじれ区間外の刻み mm (generateProfile の resolution と一致させる)
+ */
+const knurlMeshZSamples = (
+    cuts: CutZone[],
+    length: number,
+    radialSeg: number,
+    baseRes: number,
+): number[] | null => {
+    if (radialSeg <= 0) return null;
+    const colSpacing = (Math.PI * 2) / radialSeg; // 列間隔 rad
+    const TWIST_RES_MIN = 0.022;     // 最細 mm (性能下限)
+    const COLS_PER_STEP = 1.2;       // 1ステップで溝が動いてよい列数(列が細いので1列強でも目立たない)
+    const MAX_ROWS_PER_ZONE = 800;   // 1区間の行数上限(頂点爆発の防止)
+    const twistedZones = cuts
+        .filter((c) => (c.type === 'helical' || c.type === 'cross') && (c.properties.twistDeg ?? 0) !== 0)
+        .map((c) => {
+            const start = Math.max(0, c.startZ);
+            const end = Math.min(length, c.endZ);
+            const zoneLen = Math.max(1e-6, end - start);
+            const twistRate = (Math.abs(c.properties.twistDeg ?? 0) * Math.PI) / 180 / zoneLen; // rad/mm
+            let res = twistRate > 1e-9 ? (COLS_PER_STEP * colSpacing) / twistRate : baseRes;
+            res = Math.min(baseRes, Math.max(TWIST_RES_MIN, res));
+            res = Math.max(res, zoneLen / MAX_ROWS_PER_ZONE);
+            return { start, end, res };
+        })
+        .filter((zone) => zone.end > zone.start);
+    if (twistedZones.length === 0) return null; // ねじれ区間なし(縦溝のみ等)→一様で可
+
+    const resAt = (zz: number): number => {
+        let s = baseRes;
+        for (const t of twistedZones) {
+            if (zz >= t.start - 1e-9 && zz < t.end - 1e-9) s = Math.min(s, t.res);
+        }
+        return s;
+    };
+    // baseRes(0.1mm)グリッドを必ず保持しつつ、ねじれ区間に重なる各グリッド区間を res で
+    // 整数分割する(=スーパーセット)。これで 0.1mm の頂点(リング溝の谷/山など)が常に存在し、
+    // かつ斜め溝が滑らかになる。スナップで累積ドリフトも除去。
+    const snap = (v: number): number => Math.round(v * 1e6) / 1e6;
+    const zs: number[] = [0];
+    const nBase = Math.ceil(length / baseRes);
+    let prev = 0;
+    for (let i = 1; i <= nBase; i++) {
+        const gz = Math.min(length, snap(i * baseRes)); // 0.1mm グリッド点
+        const res = resAt((prev + gz) / 2);
+        const k = res < baseRes - 1e-9 ? Math.max(1, Math.ceil((gz - prev) / res)) : 1;
+        for (let j = 1; j <= k; j++) zs.push(snap(prev + ((gz - prev) * j) / k));
+        prev = gz;
+    }
+    return zs;
+};
+
 export const generateProfile = (
     length: number,
     maxDiameter: number,
@@ -108,53 +195,12 @@ export const generateProfile = (
     // Sort outline points by Z just in case
     const sortedOutline = [...outline].sort((a, b) => a.z - b.z);
 
-    // ねじれローレット/スパイラル(helical/cross)の区間は、斜め溝が「円周×Z」の格子に
-    // 対して斜行するため、Z刻みが粗いと溝の縁が階段状(ギザギザ)になる。該当区間だけ
-    // Zサンプルを細かくして斜め溝を滑らかにする(他区間は resolution のまま=頂点増を最小化)。
-    // 各ねじれ区間で必要な細分解能を見積もる。斜め溝が1ステップで動く角度を溝弧の
-    // 一定割合(K)以下に抑えると階段が目立たなくなる: step ≈ K·grooveArc / twistRate。
-    // 解像度は [TWIST_RES_MIN, resolution] にクランプし、さらに1区間の行数を ~700 で
-    // 頭打ちにして極端入力での頂点爆発を防ぐ。ねじれゼロ(縦溝)は斜行しないので対象外。
-    const TWIST_RES_MIN = 0.03; // 最細 mm (性能の下限)
-    const K_GROOVE_STEP = 0.2;  // 1ステップで溝が動いてよい量(溝弧に対する比)
-    const twistedZones = cuts
-        .filter((c) => (c.type === 'helical' || c.type === 'cross') && (c.properties.twistDeg ?? 0) !== 0)
-        .map((c) => {
-            const start = Math.max(0, c.startZ);
-            const end = Math.min(length, c.endZ);
-            const zoneLen = Math.max(1e-6, end - start);
-            const twistRate = (Math.abs(c.properties.twistDeg ?? 0) * Math.PI) / 180 / zoneLen; // rad/mm
-            const count = Math.max(1, c.properties.itemCount ?? 12);
-            const gfRaw = c.properties.grooveFraction;
-            const gf = Number.isFinite(gfRaw) ? Math.min(0.95, Math.max(0.05, gfRaw as number)) : 0.5;
-            const grooveArc = (gf * (Math.PI * 2)) / count; // rad
-            let res = twistRate > 1e-9 ? (K_GROOVE_STEP * grooveArc) / twistRate : resolution;
-            res = Math.min(resolution, Math.max(TWIST_RES_MIN, res));
-            res = Math.max(res, zoneLen / 700); // 1区間あたりの行数上限
-            return { start, end, res };
-        })
-        .filter((zone) => zone.end > zone.start);
-
-    // z 位置での Z 刻み。複数ねじれ区間が重なれば最小(最細)、区間外は resolution。
-    const stepAt = (zz: number): number => {
-        let s = resolution;
-        for (const t of twistedZones) {
-            if (zz >= t.start - 1e-9 && zz < t.end - 1e-9) s = Math.min(s, t.res);
-        }
-        return s;
-    };
-
-    // 0→length を走査して Z サンプル列を構築。各サンプルは 1e-6mm にスナップして
-    // 累積加算の浮動小数点ドリフトを除去する(z=15.0 等の境界が 14.9999998 になり
-    // カットの z>=startZ 判定を外す回帰を防ぐ。最小ステップ0.03mm≫1e-6なので細サンプルは保持)。
-    const zSamples: number[] = [0];
-    for (let zc = 0; zc < length;) {
-        zc = Math.min(length, Math.round((zc + stepAt(zc)) * 1e6) / 1e6);
-        zSamples.push(zc);
-    }
-
-    for (let i = 0; i < zSamples.length; i++) {
-        const z = zSamples[i];
+    // 注: ねじれローレット/スパイラルの斜め溝の階段(ギザギザ)対策(Z方向の細分化)は
+    // 3Dメッシュ生成側(generateBarrelGeometry)で行う。ここ(2D外形プロファイル=物理/DXF用)は
+    // ローレットの影響を受けない一様サンプリングのまま保つ。
+    const steps = Math.ceil(length / resolution);
+    for (let i = 0; i <= steps; i++) {
+        const z = i === steps ? length : i * resolution;
 
         let r = baseRadius;
 
@@ -525,6 +571,11 @@ export const generateBarrelGeometry = (
     // 1. Get Base Profile (Outer surface only)
     const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
 
+    // 円周方向分割数(ローレット系があれば共通ヘルパで算出)。本数に応じて溝幅に十分な
+    // 頂点を確保しつつ、本数が少なくても下限 KNURL_RADIAL_MIN で円筒・斜め溝を滑らかに保つ。
+    // メッシュ用Z細分化(knurlMeshZSamples)も同じ分割数を基準にするので段差幅とZ刻みが整合する。
+    const knurlRS = knurlRadialSegments(cuts);
+
     // 多角形化の基準となる「カットなし外形エンベロープ」(リング溝等を除いた最大径輪郭)。
     // 多角形は外形のみに適用し、溝部分は円形に保つため、各 z でこのエンベロープ半径を参照する。
     // ローレット/スパイラル(縦溝/斜目/綾目)も同様に「凹んでいない上面(エンベロープ面)のみ」に
@@ -572,8 +623,28 @@ export const generateBarrelGeometry = (
     // to Outer Profile Start (which is usually nearby)
 
     // --- OUTER SURFACE ---
+    // ねじれローレット/スパイラルがある区間は Z を細分化して斜め溝の階段(ギザギザ)を抑える。
+    // 2D外形(outerPoints)は一様サンプルのままなので、細分化した z で半径を線形補間して
+    // メッシュ用の行列を作る(外形=物理/DXFには影響させない設計)。
+    const radiusAtZ = (z: number): number => {
+        const n = outerPoints.length;
+        if (n === 0) return 0;
+        if (z <= outerPoints[0].y) return outerPoints[0].x;
+        if (z >= outerPoints[n - 1].y) return outerPoints[n - 1].x;
+        let lo = 0, hi = n - 1;
+        while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (outerPoints[mid].y <= z) lo = mid; else hi = mid;
+        }
+        const a = outerPoints[lo], b = outerPoints[hi];
+        return b.y === a.y ? a.x : a.x + (b.x - a.x) * ((z - a.y) / (b.y - a.y));
+    };
+    const meshZ = knurlMeshZSamples(cuts, length, knurlRS, 0.1);
+    const outerForMesh = meshZ
+        ? meshZ.map((z) => new THREE.Vector2(radiusAtZ(z), z))
+        : outerPoints;
     // Append all outer points
-    points.push(...outerPoints);
+    points.push(...outerForMesh);
 
     // --- REAR FACE ---
     // Connect Outer Profile End to Rear Lip
@@ -601,28 +672,6 @@ export const generateBarrelGeometry = (
     // Pre-filter circumferential (knurl) cuts: 縦溝/斜目/綾目 (3Dで周方向に溝を掘る)
     const knurlCuts = cuts.filter(c => c.type === 'vertical' || c.type === 'helical' || c.type === 'cross');
 
-    // Adaptive radial resolution: a fixed 64 under-samples narrow grooves.
-    // With count=8 / grooveFraction=0.1 only the boundary vertex hits the groove
-    // and edgeFade zeros its depth, making the cut vanish. Counts that don't
-    // divide segments evenly also alias. Scale segments so each groove gets
-    // MIN_VERTS_PER_GROOVE samples and align with the densest count.
-    let required = 64;
-    let maxVCount = 0;
-    if (knurlCuts.length > 0) {
-        const MIN_VERTS_PER_GROOVE = 6;
-        const MIN_GROOVE_FRACTION = 0.05;
-        for (const kCut of knurlCuts) {
-            const count = kCut.properties.itemCount || 12;
-            const grooveFraction = Math.max(
-                MIN_GROOVE_FRACTION,
-                kCut.properties.grooveFraction ?? 0.5
-            );
-            const needed = Math.ceil((count * MIN_VERTS_PER_GROOVE) / grooveFraction);
-            if (needed > required) required = needed;
-            if (count > maxVCount) maxVCount = count;
-        }
-    }
-
     // 周方向のサンプル列を構築する。各列は { theta, u, bridgeNext } を持ち、
     // bridgeNext=false の列は次列との間に面(quad)を張らない = ジオメトリの切れ目。
     //
@@ -631,10 +680,11 @@ export const generateBarrelGeometry = (
     // 多角形ゾーンがある場合は flats を滑らかに見せるため解像度を引き上げる。
     const hasPolygon = polygonZones.some((z) => z.sides >= 5);
     const ring: { theta: number; u: number; bridgeNext: boolean }[] = [];
-    let radialSegments = required;
+    // ローレット系があれば knurlRS(本数の倍数・下限480・上限1024で算出済)。無ければ
+    // 多角形用に 128、それ以外は 64。
+    let radialSegments = knurlRS > 0 ? knurlRS : (hasPolygon ? 128 : 64);
     if (hasPolygon) radialSegments = Math.max(radialSegments, 128);
-    if (maxVCount > 0) radialSegments = Math.ceil(radialSegments / maxVCount) * maxVCount;
-    radialSegments = Math.min(radialSegments, 1024);
+    radialSegments = Math.min(radialSegments, KNURL_RADIAL_MAX);
     for (let j = 0; j <= radialSegments; j++) {
         ring.push({
             theta: (j / radialSegments) * Math.PI * 2,
