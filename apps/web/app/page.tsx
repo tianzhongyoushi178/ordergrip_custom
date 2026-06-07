@@ -5,6 +5,10 @@ import { Editor } from '@/components/features/Editor';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 export default function Home() {
+  // 「元に戻す」はプレビュー側のオーバーレイに常時表示する(エディタをスクロールしても消えない)。
+  const undo = useBarrelStore((s) => s.undo);
+  const canUndo = useBarrelStore((s) => s.past.length > 0);
+
   return (
     <main className="flex flex-col md:block relative w-full h-[100dvh] bg-zinc-950 overflow-hidden">
       <div className="absolute top-3 left-4 z-10 pointer-events-none select-none flex items-center gap-3 md:gap-4">
@@ -28,6 +32,18 @@ export default function Home() {
           <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
           <path d="M3 3v5h5" />
         </svg>
+      </button>
+
+      {/* Undo Button (プレビュー側・ロゴ下に常時表示。エディタのスクロールに影響されない) */}
+      <button
+        onClick={() => undo()}
+        disabled={!canUndo}
+        title="ひとつ戻る"
+        data-testid="undo-button"
+        className="absolute top-24 left-4 z-10 flex items-center gap-1.5 bg-white/90 dark:bg-zinc-900/90 text-zinc-600 dark:text-zinc-300 px-3 py-2 rounded-lg shadow-lg hover:bg-white dark:hover:bg-zinc-800 transition-all active:scale-95 border border-zinc-200 dark:border-zinc-800 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h11a4 4 0 014 4v3" /></svg>
+        元に戻す
       </button>
 
       {/* 3D Scene Layer */}

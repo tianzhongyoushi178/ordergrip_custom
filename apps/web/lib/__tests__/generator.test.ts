@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { generateProfile, generateBarrelGeometry, polygonSidesAt, isColoredAt } from '../math/generator';
+import { generateProfile, generateBarrelGeometry, polygonSidesAt, isColoredAt, makeKnurlAreaRemovedFn } from '../math/generator';
+import { calculatePhysics } from '../math/physics';
 import type { CutZone, PolygonZone, ColorZone } from '../store/useBarrelStore';
 
 describe('generateProfile', () => {
@@ -541,10 +542,92 @@ describe('ローレット (helical / cross)', () => {
     expect(countGrooved('cross')).toBeGreaterThan(countGrooved('helical'));
   });
 
-  it('ローレットは generateProfile(=物理計算)に影響しない', () => {
+  it('ローレットは generateProfile(=外形プロファイル)に影響しない', () => {
     const withKnurl = generateProfile(45, 7.0, [knurl('cross')], 10, 10);
     const without = generateProfile(45, 7.0, [], 10, 10);
     expect(withKnurl).toEqual(without);
+  });
+});
+
+describe('makeKnurlAreaRemovedFn (ローレット/スパイラルの重量反映)', () => {
+  const knurl = (type: 'vertical' | 'helical' | 'cross', extra: Partial<CutZone['properties']> = {}): CutZone => ({
+    id: 'k', type, startZ: 10, endZ: 35,
+    properties: { depth: 0.4, itemCount: 12, grooveFraction: 0.4, twistDeg: 360, ...extra },
+  });
+  // 中央部のエンベロープ半径 = maxDiameter/2 = 3.5mm = 0.35cm (この z では land=溝なし)
+  const LAND_R_CM = 0.35;
+
+  it('ローレット系カットが無ければ常に 0', () => {
+    const fn = makeKnurlAreaRemovedFn([], 45, 7.0, 10, 10);
+    expect(fn(22.5, LAND_R_CM)).toBe(0);
+  });
+
+  it('ゾーン外では 0、ゾーン内の上面(land)では正の除去面積', () => {
+    const fn = makeKnurlAreaRemovedFn([knurl('helical')], 45, 7.0, 10, 10);
+    expect(fn(5, LAND_R_CM)).toBe(0);   // ゾーン手前
+    expect(fn(40, LAND_R_CM)).toBe(0);  // ゾーン後方
+    expect(fn(22.5, LAND_R_CM)).toBeGreaterThan(0); // ゾーン内 land
+  });
+
+  it('上面のみ: 溝(エンベロープより十分凹んだ半径)では除去しない', () => {
+    const fn = makeKnurlAreaRemovedFn([knurl('helical')], 45, 7.0, 10, 10);
+    // 0.5mm 凹んだ半径 = リング溝底相当。フェード幅0.1mmを超えるので weight=0。
+    expect(fn(22.5, LAND_R_CM - 0.05)).toBe(0);
+  });
+
+  it('綾目(cross)は斜目(helical)より除去面積が大きい(交差ぶん)', () => {
+    const fnH = makeKnurlAreaRemovedFn([knurl('helical')], 45, 7.0, 10, 10);
+    const fnC = makeKnurlAreaRemovedFn([knurl('cross')], 45, 7.0, 10, 10);
+    expect(fnC(22.5, LAND_R_CM)).toBeGreaterThan(fnH(22.5, LAND_R_CM));
+  });
+
+  it('深さが大きいほど除去面積が大きい', () => {
+    const fnShallow = makeKnurlAreaRemovedFn([knurl('vertical', { depth: 0.2 })], 45, 7.0, 10, 10);
+    const fnDeep = makeKnurlAreaRemovedFn([knurl('vertical', { depth: 0.6 })], 45, 7.0, 10, 10);
+    expect(fnDeep(22.5, LAND_R_CM)).toBeGreaterThan(fnShallow(22.5, LAND_R_CM));
+  });
+
+  it('calculatePhysics: ローレットありの重量はなしより軽い(合理的な範囲)', () => {
+    const cuts = [knurl('cross')];
+    const points = generateProfile(45, 7.0, cuts, 10, 10);
+    const knurlFn = makeKnurlAreaRemovedFn(cuts, 45, 7.0, 10, 10);
+    const wWithout = calculatePhysics(points, 17.0, 8, 8).weight;
+    const wWith = calculatePhysics(points, 17.0, 8, 8, () => 1, knurlFn).weight;
+
+    expect(wWith).toBeLessThan(wWithout);
+    const reduction = (wWithout - wWith) / wWithout;
+    expect(reduction).toBeGreaterThan(0.005); // 0.5%以上は削れる
+    expect(reduction).toBeLessThan(0.2);      // 20%未満(過剰でない)
+  });
+
+  it('不正な深さ(NaN/負)でも有限かつ非負(重量が増えたりNaNにならない)', () => {
+    const at = (depth: number): number =>
+      makeKnurlAreaRemovedFn([knurl('vertical', { depth })], 45, 7.0, 10, 10)(22.5, LAND_R_CM);
+    expect(Number.isFinite(at(NaN))).toBe(true);
+    expect(at(NaN)).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(at(-1))).toBe(true);
+    expect(at(-1)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('grooveFraction=0 は除去0 (見た目に溝が出ないのと整合)', () => {
+    const fn = makeKnurlAreaRemovedFn([knurl('vertical', { grooveFraction: 0 })], 45, 7.0, 10, 10);
+    expect(fn(22.5, LAND_R_CM)).toBe(0);
+  });
+
+  it('grooveFraction>1 でも有限(0.95にクランプ)', () => {
+    const fn = makeKnurlAreaRemovedFn([knurl('vertical', { grooveFraction: 1.5 })], 45, 7.0, 10, 10);
+    const v = fn(22.5, LAND_R_CM);
+    expect(Number.isFinite(v)).toBe(true);
+    expect(v).toBeGreaterThan(0);
+  });
+
+  it('重なるローレットは加算でなく最大を採る(3Dのmaxと整合)', () => {
+    const a: CutZone = { id: 'a', type: 'vertical', startZ: 10, endZ: 35, properties: { depth: 0.4, itemCount: 12, grooveFraction: 0.4 } };
+    const b: CutZone = { id: 'b', type: 'vertical', startZ: 10, endZ: 35, properties: { depth: 0.2, itemCount: 8, grooveFraction: 0.3 } };
+    const at = (cuts: CutZone[]): number => makeKnurlAreaRemovedFn(cuts, 45, 7.0, 10, 10)(22.5, LAND_R_CM);
+    const both = at([a, b]);
+    expect(both).toBeCloseTo(Math.max(at([a]), at([b])), 10);
+    expect(both).toBeLessThan(at([a]) + at([b])); // 加算でないこと
   });
 });
 

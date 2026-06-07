@@ -13,8 +13,11 @@ export interface PhysicsData {
  * @param areaFactorAt フラスタム中点の Z 位置(mm)を受け取り、断面積の補正係数を返す。
  *   真円=1、正多角形は < 1 (頂点=半径の正 N 角形なら N·sin(2π/N)/(2π))。区間ごとに
  *   多角形/円を切り替えられるよう関数で受ける。本体(中実部)のみに掛かる(穴は円形)。
+ * @param knurlAreaAt フラスタム中点の Z 位置(mm)と半径(cm)を受け取り、ローレット/スパイラル
+ *   (周方向の溝)が除去する断面積(cm²)を返す。多角形係数とは独立した絶対面積として円錐台体積から減算する。
+ *   生成側 (generator.makeKnurlAreaRemovedFn) で「上面のみ」適用と整合したモデルを構築する。
  */
-export const calculatePhysics = (points: THREE.Vector2[], density: number, holeDepthFront: number = 0, holeDepthRear: number = 0, areaFactorAt: (zMid: number) => number = () => 1): PhysicsData => {
+export const calculatePhysics = (points: THREE.Vector2[], density: number, holeDepthFront: number = 0, holeDepthRear: number = 0, areaFactorAt: (zMid: number) => number = () => 1, knurlAreaAt: (zMidMm: number, rMidCm: number) => number = () => 0): PhysicsData => {
     let volume = 0;
     let momentZ = 0;
 
@@ -39,6 +42,12 @@ export const calculatePhysics = (points: THREE.Vector2[], density: number, holeD
         const zMidMm = (p1.y + p2.y) / 2;
         const dv = (Math.PI * h / 3) * (r1 * r1 + r1 * r2 + r2 * r2) * areaFactorAt(zMidMm);
 
+        // ローレット/スパイラル(周方向の溝)が外周面から除去する体積を減算する。
+        // 微小区間(0.1mm刻み)なので、中点半径での除去断面積 × 区間長 の角柱で近似。
+        const rMidCm = (r1 + r2) / 2;
+        const dvKnurl = knurlAreaAt(zMidMm, rMidCm) * h;
+        const dvNet = Math.max(0, dv - dvKnurl);
+
         // Centroid of frustum (z-coordinate)
         // Formula for centroid of conical frustum relative to base (z1)
         const numerator = r1 * r1 + 2 * r1 * r2 + 3 * r2 * r2;
@@ -47,8 +56,8 @@ export const calculatePhysics = (points: THREE.Vector2[], density: number, holeD
 
         const zc = z1 + relativeZc;
 
-        volume += dv;
-        momentZ += dv * zc;
+        volume += dvNet;
+        momentZ += dvNet * zc;
     }
 
     const holeRadCm = HOLE_RADIUS_CM;

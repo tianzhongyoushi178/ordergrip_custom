@@ -1,7 +1,7 @@
 'use client';
 
 import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
-import { generateProfile, polygonAreaFactor, polygonSidesAt } from '@/lib/math/generator';
+import { generateProfile, polygonAreaFactor, polygonSidesAt, makeKnurlAreaRemovedFn } from '@/lib/math/generator';
 import { BARREL_COLORS, colorEnName } from '@/lib/colors';
 import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
@@ -137,7 +137,7 @@ export const Editor = () => {
         shapeType, frontEndShape, rearEndShape, polygonZones, colorZones, accentColor,
         updateDimension, updateShapeType, updateEndShape, addCut, removeCut, updateCut,
         setAll, setMaterialDensity, addPolygonZone, updatePolygonZone, removePolygonZone,
-        setAccentColor, addColorZone, updateColorZone, removeColorZone, undo, past, activeCutId, setActiveCutId
+        setAccentColor, addColorZone, updateColorZone, removeColorZone, activeCutId, setActiveCutId
     } = useBarrelStore();
 
     const [showWizard, setShowWizard] = useState(true);
@@ -145,7 +145,9 @@ export const Editor = () => {
     // Add physics dependencies
     const physics = useMemo(() => {
         const points = generateProfile(length, maxDiameter, cuts, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape, outlineInterp);
-        return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, (z) => polygonAreaFactor(polygonSidesAt(polygonZones, z)));
+        // ローレット/スパイラル(周方向の溝)の削り分を重量・重心に反映する除去断面積関数(上面のみ整合)。
+        const knurlAreaAt = makeKnurlAreaRemovedFn(cuts, length, maxDiameter, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape, outlineInterp);
+        return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, (z) => polygonAreaFactor(polygonSidesAt(polygonZones, z)), knurlAreaAt);
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones]);
 
     // Mobile toggle removed for split view
@@ -323,17 +325,7 @@ export const Editor = () => {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-xl font-bold">バレルスペック設定</h1>
                     <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => undo()}
-                            disabled={past.length === 0}
-                            title="ひとつ戻る"
-                            data-testid="undo-button"
-                            className="text-[10px] flex items-center gap-1 bg-zinc-200 dark:bg-zinc-800 px-2 py-1 rounded hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h11a4 4 0 014 4v3" /></svg>
-                            元に戻す
-                        </button>
+                        {/* 「元に戻す」はプレビュー側(app/page.tsx)に常時表示するため、ここには置かない。 */}
                         <button
                             onClick={() => setShowWizard(true)}
                             className="text-[10px] bg-zinc-200 dark:bg-zinc-800 px-2 py-1 rounded hover:opacity-80 transition-opacity"

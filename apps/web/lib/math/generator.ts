@@ -331,6 +331,137 @@ export const isColoredAt = (zones: ColorZone[], z: number): boolean => {
     return false;
 };
 
+/** 3D生成・物理計算で共有する「上面のみ」フェード幅 (mm)。溝肩でこの距離をかけて掘り込みを0にする。 */
+export const KNURL_LAND_FADE_MM = 0.1;
+
+/** 溝底形状ごとの「溝内平均深さ係数」(溝全幅にわたる depthFactor の平均)。3D生成の depthFactor と整合。 */
+const knurlAvgDepthFactor = (bottomShape: 'flat' | 'v' | 'round'): number => {
+    switch (bottomShape) {
+        // V字: 中央最深の三角。平均 = 0.5
+        case 'v': return 0.5;
+        // 丸底(sin半周): 平均 = 2/π
+        case 'round': return 2 / Math.PI;
+        // フラット底 + 両端 10% のエッジ遷移。平均 = 1 - edgeWidth = 0.9
+        case 'flat':
+        default: return 0.9;
+    }
+};
+
+/** 溝底形状ごとの「溝内 depthFactor² の平均」。除去断面積の二次補正 ∫rMod²/2 に使う。 */
+const knurlAvgDepthFactorSq = (bottomShape: 'flat' | 'v' | 'round'): number => {
+    switch (bottomShape) {
+        // V字(三角): ∫₀¹(1-2|t-0.5|)² dt = 1/3
+        case 'v': return 1 / 3;
+        // 丸底(sin半周): ∫₀¹ sin²(πt) dt = 1/2
+        case 'round': return 0.5;
+        // フラット底 + 両端10%エッジ遷移: 0.8 + 2·(0.1/3) ≈ 0.8667
+        case 'flat':
+        default: return 0.8 + 2 * (0.1 / 3);
+    }
+};
+
+/** ローレット系カットの入力を 3D生成・物理計算で共通に正規化した結果。 */
+interface SanitizedKnurlProps {
+    depthMm: number;        // 掘り込み深さ mm (>0、不正値は既定 0.5)
+    grooveFraction: number; // 溝の角度占有比 0〜0.95
+    bottomShape: 'flat' | 'v' | 'round';
+}
+
+/**
+ * ローレット系カット(縦溝/斜目/綾目)の入力プロパティを正規化する。
+ * NaN・負・範囲外などの不正値を丸め、見た目(3D)と重量(物理)で必ず同じ値を使わせる
+ * (片方だけ削れる/重量だけ増える といった不整合を防ぐ)。
+ */
+const sanitizeKnurlProps = (p: CutZone['properties']): SanitizedKnurlProps => {
+    const d = p.depth;
+    const depthMm = Number.isFinite(d) && (d as number) > 0 ? (d as number) : 0.5;
+    const gf = p.grooveFraction;
+    const grooveFraction = Number.isFinite(gf) ? Math.min(0.95, Math.max(0, gf as number)) : 0.5;
+    const bottomShape = p.bottomShape ?? 'flat';
+    return { depthMm, grooveFraction, bottomShape };
+};
+
+/**
+ * ローレット/スパイラル(縦溝/斜目/綾目)が外周面から除去する「断面積(cm²)」を Z 位置ごとに返す関数を作る。
+ * physics の円錐台積分から減算して重量・重心に反映する。3D生成の「上面のみ」適用と整合させるため、
+ * リング溝等で凹んだ Z ではエンベロープからの凹み量に応じてフェードさせる(掘り込まない)。
+ *
+ * 近似モデル: ある Z 断面で周方向に占める溝角度比 = grooveFraction (綾目は交差ぶん 1-(1-gf)²)、
+ * 溝内平均深さ係数 avgDF、深さ vDepth。円環シェルの除去面積 ≈ 2π·(r·avgDF·vDepth - avgDF2·vDepth²/2)·gfEff·weight。
+ * 多角形ゾーン内でも外周を円(2πr)で近似する(多角形フラットぶんの周長差は無視)。
+ *
+ * @returns (zMidMm, rMidCm) -> 除去断面積 cm² 。ローレット系カットが無ければ常に 0 を返す。
+ */
+export const makeKnurlAreaRemovedFn = (
+    cuts: CutZone[],
+    length: number,
+    maxDiameter: number,
+    frontTaperLen: number = 10,
+    rearTaperLen: number = 10,
+    outline: { z: number; d: number }[] = [],
+    frontEndShape: EndShape = 'taper',
+    rearEndShape: EndShape = 'taper',
+    outlineInterp: OutlineInterp = 'smooth',
+): (zMidMm: number, rMidCm: number) => number => {
+    const knurlCuts = cuts.filter(
+        (c) => c.type === 'vertical' || c.type === 'helical' || c.type === 'cross',
+    );
+    if (knurlCuts.length === 0) return () => 0;
+
+    // 凹み判定用エンベロープ(カットなし外形)。3D生成側の「上面のみ」基準と同じ。
+    const env = generateProfile(
+        length, maxDiameter, [], frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp,
+    );
+    // z(mm) -> エンベロープ半径(mm)。env は z 昇順なので二分探索で線形補間。
+    const envRAtMm = (z: number): number => {
+        const n = env.length;
+        if (n === 0) return 0;
+        if (z <= env[0].y) return env[0].x;
+        if (z >= env[n - 1].y) return env[n - 1].x;
+        let lo = 0, hi = n - 1;
+        while (hi - lo > 1) {
+            const mid = (lo + hi) >> 1;
+            if (env[mid].y <= z) lo = mid; else hi = mid;
+        }
+        const a = env[lo], b = env[hi];
+        return b.y === a.y ? a.x : a.x + (b.x - a.x) * ((z - a.y) / (b.y - a.y));
+    };
+
+    const fadeCm = KNURL_LAND_FADE_MM / 10;
+
+    return (zMidMm: number, rMidCm: number): number => {
+        // 上面のみ: リング溝等で凹んだ部分(cutDepth>0)はフェードして掘り込まない。
+        const envRcm = envRAtMm(zMidMm) / 10;
+        const cutDepthCm = Math.max(0, envRcm - rMidCm);
+        const weight = cutDepthCm > 0 ? Math.max(0, 1 - cutDepthCm / fadeCm) : 1;
+        if (weight <= 0) return 0;
+
+        // 複数のローレット系カットが同じ Z に重なる場合、3D生成は角度ごとに最深の溝だけを
+        // 採用する(rMod = max)。重量側も整合させ、加算ではなく最大の除去量を採る。
+        // 注: 位相/本数が異なるローレットが重なると 3D は角度方向に union 的に削れるため、
+        // 厳密な平均除去量は max と sum の間になる。ここでは保守的に max(過小側)で近似する
+        // (過大評価=重量が軽く出る方向は避ける)。重なりは稀なケースのため許容。
+        let area = 0; // cm²
+        for (const c of knurlCuts) {
+            if (zMidMm < c.startZ || zMidMm >= c.endZ) continue;
+            const { depthMm, grooveFraction, bottomShape } = sanitizeKnurlProps(c.properties);
+            const vDepthCm = depthMm / 10;
+            // 綾目(cross)は逆向き2方向の交差。占有角度比は和-積(包除)で近似。
+            const gfEff = c.type === 'cross'
+                ? 1 - (1 - grooveFraction) * (1 - grooveFraction)
+                : grooveFraction;
+            // 溝の半径方向除去を厳密化: シェル断面積 = ∫(r·rMod - rMod²/2)dθ。
+            // 一次項 r·avgDF·vDepth から二次項 avgDF2·vDepth²/2 を引く(浅溝での過大評価を抑制)。
+            const avgDF = knurlAvgDepthFactor(bottomShape);
+            const avgDF2 = knurlAvgDepthFactorSq(bottomShape);
+            const shell = rMidCm * avgDF * vDepthCm - 0.5 * avgDF2 * vDepthCm * vDepthCm;
+            const perCutArea = 2 * Math.PI * gfEff * Math.max(0, shell) * weight;
+            area = Math.max(area, perCutArea);
+        }
+        return area;
+    };
+};
+
 export const generateBarrelGeometry = (
     length: number,
     maxDiameter: number,
@@ -352,8 +483,12 @@ export const generateBarrelGeometry = (
 
     // 多角形化の基準となる「カットなし外形エンベロープ」(リング溝等を除いた最大径輪郭)。
     // 多角形は外形のみに適用し、溝部分は円形に保つため、各 z でこのエンベロープ半径を参照する。
+    // ローレット/スパイラル(縦溝/斜目/綾目)も同様に「凹んでいない上面(エンベロープ面)のみ」に
+    // 掛け、リング溝などで削れた部分には掛けない。そのため凹み量算出用に、多角形が無くても
+    // ローレット系カットがあればエンベロープを用意する。
     const hasPolygonZone = polygonZones.some((pz) => pz.sides >= 5);
-    const envOuter = hasPolygonZone
+    const hasKnurlCut = cuts.some((c) => c.type === 'vertical' || c.type === 'helical' || c.type === 'cross');
+    const envOuter = (hasPolygonZone || hasKnurlCut)
         ? generateProfile(length, maxDiameter, [], frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp)
         : outerPoints;
     // z (バレル軸方向 mm) → エンベロープ半径。envOuter は z 昇順なので二分探索で線形補間。
@@ -510,10 +645,11 @@ export const generateBarrelGeometry = (
 
         // この断面の Z 位置(y)が属する多角形ゾーンの角数 (外周面のみ・無ければ 0=円)
         const sectionSides = isOuterSurface ? polygonSidesAt(polygonZones, y) : 0;
-        // 多角形化は外形(エンベロープ)のみに適用する。リング溝等で削れた部分(cutDepth>0)は
-        // 多角形 inset を弱めて円形 rBase を保つ(溝まで多角形にならないようにする)。
-        const envR = sectionSides >= 5 ? envRAt(y) : rBase;
-        const cutDepth = sectionSides >= 5 ? Math.max(0, envR - rBase) : 0;
+        // 外形(エンベロープ)からの凹み量。リング溝等で削れた部分は cutDepth>0 になる。
+        // 多角形化・ローレット/スパイラルともに「凹んでいない上面のみ」へ適用するための重みに使う。
+        const useEnvelope = isOuterSurface && (sectionSides >= 5 || hasKnurlCut);
+        const envR = useEnvelope ? envRAt(y) : rBase;
+        const cutDepth = useEnvelope ? Math.max(0, envR - rBase) : 0;
         const polyWeight = sectionSides >= 5 ? Math.max(0, 1 - cutDepth / 0.05) : 0;
         // 外周面かつカラー区間内なら accentColor、それ以外はベース金属色で着色
         const sectionColored = isOuterSurface && isColoredAt(colorZones, y);
@@ -535,9 +671,8 @@ export const generateBarrelGeometry = (
                 for (const kCut of knurlCuts) {
                     if (y >= kCut.startZ && y < kCut.endZ) {
                         const count = kCut.properties.itemCount || 12;
-                        const vDepth = kCut.properties.depth || 0.5;
-                        const grooveFraction = kCut.properties.grooveFraction ?? 0.5;
-                        const bottomShape = kCut.properties.bottomShape ?? 'flat';
+                        // 入力正規化は重量計算(makeKnurlAreaRemovedFn)と共通化し、見た目と重量を必ず一致させる。
+                        const { depthMm: vDepth, grooveFraction, bottomShape } = sanitizeKnurlProps(kCut.properties);
                         const segmentRad = (Math.PI * 2) / count;
 
                         // ねじれ率 (rad/mm): vertical=0。total twistDeg をゾーン長で割る。
@@ -582,6 +717,12 @@ export const generateBarrelGeometry = (
                             }
                         }
                     }
+                }
+                // 上面のみ: リング溝等で凹んだ部分(cutDepth>0)にはローレット/スパイラルを掛けない。
+                // cutDepth が小さい上面(land)では全量、溝肩から溝内へ入るにつれフェードして 0 に。
+                // フェード幅は物理計算(makeKnurlAreaRemovedFn)と共通の KNURL_LAND_FADE_MM。
+                if (rMod > 0 && cutDepth > 0) {
+                    rMod *= Math.max(0, 1 - cutDepth / KNURL_LAND_FADE_MM);
                 }
             } else if (isInnerHole) {
                 // Thread Simulation
