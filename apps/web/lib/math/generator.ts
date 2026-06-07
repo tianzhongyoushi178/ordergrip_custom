@@ -108,9 +108,53 @@ export const generateProfile = (
     // Sort outline points by Z just in case
     const sortedOutline = [...outline].sort((a, b) => a.z - b.z);
 
-    const steps = Math.ceil(length / resolution);
-    for (let i = 0; i <= steps; i++) {
-        const z = i === steps ? length : i * resolution;
+    // ねじれローレット/スパイラル(helical/cross)の区間は、斜め溝が「円周×Z」の格子に
+    // 対して斜行するため、Z刻みが粗いと溝の縁が階段状(ギザギザ)になる。該当区間だけ
+    // Zサンプルを細かくして斜め溝を滑らかにする(他区間は resolution のまま=頂点増を最小化)。
+    // 各ねじれ区間で必要な細分解能を見積もる。斜め溝が1ステップで動く角度を溝弧の
+    // 一定割合(K)以下に抑えると階段が目立たなくなる: step ≈ K·grooveArc / twistRate。
+    // 解像度は [TWIST_RES_MIN, resolution] にクランプし、さらに1区間の行数を ~700 で
+    // 頭打ちにして極端入力での頂点爆発を防ぐ。ねじれゼロ(縦溝)は斜行しないので対象外。
+    const TWIST_RES_MIN = 0.03; // 最細 mm (性能の下限)
+    const K_GROOVE_STEP = 0.2;  // 1ステップで溝が動いてよい量(溝弧に対する比)
+    const twistedZones = cuts
+        .filter((c) => (c.type === 'helical' || c.type === 'cross') && (c.properties.twistDeg ?? 0) !== 0)
+        .map((c) => {
+            const start = Math.max(0, c.startZ);
+            const end = Math.min(length, c.endZ);
+            const zoneLen = Math.max(1e-6, end - start);
+            const twistRate = (Math.abs(c.properties.twistDeg ?? 0) * Math.PI) / 180 / zoneLen; // rad/mm
+            const count = Math.max(1, c.properties.itemCount ?? 12);
+            const gfRaw = c.properties.grooveFraction;
+            const gf = Number.isFinite(gfRaw) ? Math.min(0.95, Math.max(0.05, gfRaw as number)) : 0.5;
+            const grooveArc = (gf * (Math.PI * 2)) / count; // rad
+            let res = twistRate > 1e-9 ? (K_GROOVE_STEP * grooveArc) / twistRate : resolution;
+            res = Math.min(resolution, Math.max(TWIST_RES_MIN, res));
+            res = Math.max(res, zoneLen / 700); // 1区間あたりの行数上限
+            return { start, end, res };
+        })
+        .filter((zone) => zone.end > zone.start);
+
+    // z 位置での Z 刻み。複数ねじれ区間が重なれば最小(最細)、区間外は resolution。
+    const stepAt = (zz: number): number => {
+        let s = resolution;
+        for (const t of twistedZones) {
+            if (zz >= t.start - 1e-9 && zz < t.end - 1e-9) s = Math.min(s, t.res);
+        }
+        return s;
+    };
+
+    // 0→length を走査して Z サンプル列を構築。各サンプルは 1e-6mm にスナップして
+    // 累積加算の浮動小数点ドリフトを除去する(z=15.0 等の境界が 14.9999998 になり
+    // カットの z>=startZ 判定を外す回帰を防ぐ。最小ステップ0.03mm≫1e-6なので細サンプルは保持)。
+    const zSamples: number[] = [0];
+    for (let zc = 0; zc < length;) {
+        zc = Math.min(length, Math.round((zc + stepAt(zc)) * 1e6) / 1e6);
+        zSamples.push(zc);
+    }
+
+    for (let i = 0; i < zSamples.length; i++) {
+        const z = zSamples[i];
 
         let r = baseRadius;
 
