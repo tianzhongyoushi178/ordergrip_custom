@@ -3,8 +3,9 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { Barrel } from './Barrel';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
-import { useEffect, useState, useRef, type ComponentRef } from 'react';
+import { Suspense, useEffect, useState, useRef, type ComponentRef } from 'react';
 
 export const Scene = () => {
     const { length, cameraResetTrigger } = useBarrelStore();
@@ -56,13 +57,24 @@ export const Scene = () => {
                 }
             }}
         >
-            <Environment preset="city" />
+            {/* Environment は drei が外部CDNからHDRを実行時取得する。取得失敗で
+                Canvas 全体が落ちないよう Suspense + ErrorBoundary で隔離する。
+                失敗時は環境反射のみ消え、ambient/directional ライトでバレルは描画継続。 */}
+            <Suspense fallback={null}>
+                <ErrorBoundary fallback={null}>
+                    <Environment preset="city" />
+                </ErrorBoundary>
+            </Suspense>
             <ambientLight intensity={0.4} />
             <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
 
             <group position={[0, 0, 0]}>
                 <Barrel />
 
+                {/* ラベル(drei Text)は troika が外部CDNからフォントを取得する。
+                    取得失敗でシーンが落ちないよう Suspense + ErrorBoundary で隔離する。 */}
+                <Suspense fallback={null}>
+                  <ErrorBoundary fallback={null}>
                 {/* Visual Markers - Front (Tip) */}
                 {/* Fixed Geometry: Front is at -length/2 */}
                 <group position={[0, 0, -length / 2 - offset]}>
@@ -109,6 +121,8 @@ export const Scene = () => {
                         </Text>
                     </Billboard>
                 </group>
+                  </ErrorBoundary>
+                </Suspense>
 
                 {/* Axis Line/Floor Grid helper could be added if requested, but clean is better */}
             </group>

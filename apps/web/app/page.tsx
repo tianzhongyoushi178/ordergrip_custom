@@ -2,6 +2,7 @@
 
 import { Scene } from '@/components/canvas/Scene';
 import { Editor } from '@/components/features/Editor';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 
 export default function Home() {
@@ -59,7 +60,34 @@ export default function Home() {
           backgroundColor: '#0a0a0a',
         }}
       >
-        <Scene />
+        {/* 3D描画(WebGLコンテキスト生成失敗や外部アセット取得失敗)でアプリ全体が
+            落ちないよう隔離。失敗してもエディタ・重量計算・DXF出力は使える。 */}
+        <ErrorBoundary
+          fallback={(reset) => (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-zinc-300">
+              <p className="text-sm font-bold">3Dプレビューを読み込めませんでした</p>
+              <p className="text-xs text-zinc-500 max-w-xs">
+                通信環境や端末のグラフィック制限が原因の可能性があります。設定の編集や重量計算はそのまま利用できます。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={reset}
+                  className="px-4 py-2 rounded-lg bg-white/90 text-zinc-800 text-xs font-bold hover:bg-white active:scale-95 transition-all"
+                >
+                  3Dを再試行
+                </button>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 rounded-lg border border-zinc-600 text-zinc-300 text-xs font-bold hover:bg-zinc-800 active:scale-95 transition-all"
+                >
+                  ページを再読み込み
+                </button>
+              </div>
+            </div>
+          )}
+        >
+          <Scene />
+        </ErrorBoundary>
       </div>
 
       {/* 操作ガイド */}
