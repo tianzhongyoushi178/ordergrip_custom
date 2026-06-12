@@ -562,7 +562,11 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         if (cut.type === 'helical' || cut.type === 'cross') {
             const midZ = (cut.startZ + cut.endZ) / 2;
             const n = cut.properties.itemCount ?? 12;
-            const label = cut.type === 'cross' ? `KNURL diamond x${n}` : `SPIRAL x${n}`;
+            // 斜目は巻き方向を注記 (twistDeg 正=右巻き RH / 負=左巻き LH)。綾目は両方向交差のため不要。
+            const hand = cut.type === 'helical' && (cut.properties.twistDeg ?? 0) !== 0
+                ? ((cut.properties.twistDeg ?? 0) < 0 ? ' LH' : ' RH')
+                : '';
+            const label = cut.type === 'cross' ? `KNURL diamond x${n}` : `SPIRAL x${n}${hand}`;
             dxf.addText(point3d(midZ - 8, labelOffset + 0.5, 0), 1.5, `${label} z${cut.startZ.toFixed(0)}-${cut.endZ.toFixed(0)}`, { layerName: 'CUT_LABEL' });
             continue;
         }

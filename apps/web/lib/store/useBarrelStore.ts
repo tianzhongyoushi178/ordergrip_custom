@@ -24,7 +24,7 @@ export interface CutZone {
     gapWidth?: number;  // カット間 mm (double/triple用)
     grooveFraction?: number; // 縦カット溝幅比率 (0.1〜0.9, default 0.5)
     bottomShape?: 'flat' | 'v' | 'round'; // 縦カット底形状
-    twistDeg?: number; // 斜目/綾目ローレットのゾーン全長でのねじれ角(度)
+    twistDeg?: number; // 斜目/綾目ローレットのゾーン全長でのねじれ角(度)。符号が巻き方向 (正=右巻き, 負=左巻き)
   }
 }
 

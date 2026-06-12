@@ -160,6 +160,18 @@ describe('generateDxf', () => {
         expect(dxf).toContain('KNURL diamond');
     });
 
+    it('斜目ローレット(スパイラル)は巻き方向 RH/LH を注記する', () => {
+        const spiral = (twistDeg: number) => generateDxf({
+            ...baseInput,
+            cuts: [{
+                id: 's1', type: 'helical', startZ: 15, endZ: 30,
+                properties: { depth: 0.4, itemCount: 24, twistDeg },
+            }],
+        });
+        expect(spiral(360)).toContain('SPIRAL x24 RH');
+        expect(spiral(-360)).toContain('SPIRAL x24 LH');
+    });
+
     it('カラー区間は COLOR 注記を出す', () => {
         const dxf = generateDxf({
             ...baseInput,

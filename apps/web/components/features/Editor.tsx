@@ -1140,20 +1140,48 @@ export const Editor = () => {
                                         </div>
                                     )}
 
-                                    {/* ねじれ角 (斜目/綾目ローレットのみ) */}
+                                    {/* ねじれ角 (斜目/綾目ローレットのみ)。twistDeg の符号が巻き方向 (正=右巻き, 負=左巻き) */}
                                     {(cut.type === 'helical' || cut.type === 'cross') && (
                                         <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700/50">
                                             <div className="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                                                 <span>ねじれ角</span>
-                                                <span className="text-zinc-400">{Math.round(cut.properties.twistDeg ?? 360)}°</span>
+                                                <span className="text-zinc-400">{Math.round(Math.abs(cut.properties.twistDeg ?? 360))}°</span>
                                             </div>
                                             <input
                                                 type="range"
-                                                min={0} max={720} step={15}
-                                                value={cut.properties.twistDeg ?? 360}
-                                                onChange={(e) => updateCut(cut.id, { properties: { ...cut.properties, twistDeg: parseFloat(e.target.value) } })}
+                                                // min=15: 0°はねじれ無し(縦溝と等価)になり巻き方向トグルと矛盾するため設定不能にする
+                                                min={15} max={720} step={15}
+                                                value={Math.abs(cut.properties.twistDeg ?? 360)}
+                                                onChange={(e) => {
+                                                    const sign = (cut.properties.twistDeg ?? 360) < 0 ? -1 : 1;
+                                                    updateCut(cut.id, { properties: { ...cut.properties, twistDeg: sign * parseFloat(e.target.value) } });
+                                                }}
                                                 className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                                             />
+                                            {/* 巻き方向 (綾目は逆向き2方向の交差で対称のため斜目のみ) */}
+                                            {cut.type === 'helical' && (
+                                                <div className="grid grid-cols-2 gap-1 mt-2">
+                                                    {([
+                                                        { sign: 1, label: '右巻き', icon: '↗' },
+                                                        { sign: -1, label: '左巻き', icon: '↖' },
+                                                    ] as const).map((dir) => (
+                                                        <button
+                                                            key={dir.sign}
+                                                            onClick={() => {
+                                                                const mag = Math.abs(cut.properties.twistDeg ?? 360);
+                                                                updateCut(cut.id, { properties: { ...cut.properties, twistDeg: dir.sign * mag } });
+                                                            }}
+                                                            className={`py-1.5 rounded text-xs font-bold transition-all ${
+                                                                ((cut.properties.twistDeg ?? 360) < 0 ? -1 : 1) === dir.sign
+                                                                    ? 'bg-indigo-600 text-white'
+                                                                    : 'bg-white dark:bg-zinc-900 text-zinc-500 border border-zinc-200 dark:border-zinc-700 hover:border-indigo-400'
+                                                            }`}
+                                                        >
+                                                            <span className="mr-1">{dir.icon}</span>{dir.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 

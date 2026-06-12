@@ -9,7 +9,7 @@ export interface CutParams {
     count?: number;
     gapWidth?: number;
     itemCount?: number;
-    twistDeg?: number; // 斜目/綾目ローレットのねじれ角(度)
+    twistDeg?: number; // 斜目/綾目ローレットのねじれ角(度)。符号が巻き方向 (正=右巻き, 負=左巻き)
 }
 
 interface CutSelectorProps {

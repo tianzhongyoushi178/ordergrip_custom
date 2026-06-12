@@ -525,6 +525,40 @@ describe('ローレット (helical / cross)', () => {
     expect(Math.min(...r)).toBeLessThan(3.4);
   });
 
+  it('helical: 負の twistDeg(逆巻き)でも溝が生じ、溝の回転方向が正巻きと逆になる', () => {
+    // 溝(深い頂点)の周方向位置を「溝1ピッチ(=2π/12)に畳み込んだ円環平均角(度)」で求める。
+    // flat底で溝内に同深度の頂点が複数あるため、平均で溝中心を推定する。
+    const grooveCenterDeg = (geom: ReturnType<typeof generateBarrelGeometry>, bz: number): number => {
+      const pos = geom.getAttribute('position');
+      let sx = 0, sy = 0;
+      for (let i = 0; i < pos.count; i++) {
+        if (Math.abs(-pos.getY(i) - bz) < 0.2) {
+          const x = pos.getX(i), z = pos.getZ(i);
+          const r = Math.hypot(x, z);
+          if (r > 2.5 && r < 3.25) { // 溝の深部のみ (base 3.5, 溝底 3.1)
+            const a = Math.atan2(x, z) * 12; // 12本周期に畳み込み
+            sx += Math.cos(a); sy += Math.sin(a);
+          }
+        }
+      }
+      return (Math.atan2(sy, sx) / 12) * (180 / Math.PI); // -15..15 度
+    };
+    // Z=15→20 (5mm) での溝中心の回転量。twist 60° / 25mm → 12° 期待 (ピッチ30°未満で一意)
+    const rotation = (twistDeg: number): number => {
+      const geom = generateBarrelGeometry(45, 7.0, [knurl('helical', twistDeg)], 10, 10, 8, 8);
+      let d = grooveCenterDeg(geom, 20) - grooveCenterDeg(geom, 15);
+      while (d > 15) d -= 30;
+      while (d <= -15) d += 30;
+      return d;
+    };
+    const rotPos = rotation(60);
+    const rotNeg = rotation(-60);
+    expect(Math.abs(rotPos)).toBeGreaterThan(6); // ねじれている
+    expect(Math.abs(rotNeg)).toBeGreaterThan(6);
+    expect(Math.sign(rotPos)).not.toBe(Math.sign(rotNeg)); // 回転方向が逆
+    expect(Math.abs(rotPos + rotNeg)).toBeLessThan(2); // 鏡像 (大きさは同じ)
+  });
+
   it('cross は helical より溝が密(逆向き2方向の交差＝ねじれが効いている)', () => {
     const countGrooved = (type: 'helical' | 'cross'): number => {
       const geom = generateBarrelGeometry(45, 7.0, [knurl(type)], 10, 10, 8, 8);
@@ -628,6 +662,41 @@ describe('makeKnurlAreaRemovedFn (ローレット/スパイラルの重量反映
     const both = at([a, b]);
     expect(both).toBeCloseTo(Math.max(at([a]), at([b])), 10);
     expect(both).toBeLessThan(at([a]) + at([b])); // 加算でないこと
+  });
+});
+
+describe('ローレット/スパイラルは上面のみ(リング溝に入らない)', () => {
+  // リング溝(横溝)と斜目ローレットを同じ Z 区間に重ねる。
+  // pitch=2 / cutWidth=1 → factor<0.5 が溝。Z=10.5(localZ0.5→谷) / Z=11.5(localZ1.5→山)。
+  const ring: CutZone = { id: 'r', type: 'ring', startZ: 10, endZ: 35, properties: { pitch: 2, depth: 0.5, cutWidth: 1.0 } };
+  const helical: CutZone = { id: 'h', type: 'helical', startZ: 10, endZ: 35, properties: { depth: 0.4, itemCount: 12, grooveFraction: 0.4, twistDeg: 360 } };
+
+  // 指定バレル Z の外周面頂点(r>2.5)の半径配列
+  const radiiAt = (geom: ReturnType<typeof generateBarrelGeometry>, bz: number): number[] => {
+    const pos = geom.getAttribute('position');
+    const out: number[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(-pos.getY(i) - bz) < 0.03) {
+        const r = Math.hypot(pos.getX(i), pos.getZ(i));
+        if (r > 2.5) out.push(r);
+      }
+    }
+    return out;
+  };
+  const spread = (rs: number[]): number => (rs.length ? Math.max(...rs) - Math.min(...rs) : 0);
+
+  it('リング溝の谷(Z=10.5)では周方向のローレット変動がほぼ無い(溝に入らない)', () => {
+    const geom = generateBarrelGeometry(45, 7.0, [ring, helical], 10, 10, 8, 8);
+    const rs = radiiAt(geom, 10.5);
+    expect(rs.length).toBeGreaterThan(0);
+    expect(spread(rs)).toBeLessThan(0.05); // 角度方向に削れていない = 溝にローレット無し
+  });
+
+  it('リング山(Z=11.5)では周方向のローレット変動がある(上面には掛かる)', () => {
+    const geom = generateBarrelGeometry(45, 7.0, [ring, helical], 10, 10, 8, 8);
+    const rs = radiiAt(geom, 11.5);
+    expect(rs.length).toBeGreaterThan(0);
+    expect(spread(rs)).toBeGreaterThan(0.2); // ローレット深さ(0.4)相応の角度変動
   });
 });
 
