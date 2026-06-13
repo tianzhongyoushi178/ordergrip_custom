@@ -7,6 +7,7 @@ import { calculatePhysics } from '@/lib/math/physics';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { exportToDxf, shareDxf, OFFICIAL_LINE_URL } from '@/lib/storage/dxf';
 import { shareBarrelToX } from '@/lib/storage/share-x';
+import { buildSpecSummary, MATERIAL_OPTIONS } from '@/lib/spec-summary';
 import { PDFUploader } from './PDFUploader';
 import { SpecWizard } from './SpecWizard';
 import { CutSelector, type CutParams } from './CutSelector';
@@ -149,6 +150,18 @@ export const Editor = () => {
         const knurlAreaAt = makeKnurlAreaRemovedFn(cuts, length, maxDiameter, frontTaperLength, rearTaperLength, outline, frontEndShape, rearEndShape, outlineInterp);
         return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, (z) => polygonAreaFactor(polygonSidesAt(polygonZones, z)), knurlAreaAt);
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones]);
+
+    // X 投稿 / LINE 相談の本文に差し込むスペック要約 (材質・最大径・全長・重量・重心位置)。
+    const specText = useMemo(
+        () => buildSpecSummary({
+            materialDensity,
+            maxDiameter,
+            length,
+            weight: physics.weight,
+            centerOfGravity: physics.centerOfGravity,
+        }),
+        [materialDensity, maxDiameter, length, physics.weight, physics.centerOfGravity],
+    );
 
     // Mobile toggle removed for split view
     // const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -429,10 +442,9 @@ export const Editor = () => {
                             onChange={(e) => setMaterialDensity(parseFloat(e.target.value))}
                             className="w-full p-2 bg-zinc-100 dark:bg-zinc-800 rounded border border-zinc-200 dark:border-zinc-700 text-sm"
                         >
-                            <option value={18.0}>タングステン95% (18.0g/cm³)</option>
-                            <option value={17.0}>タングステン90% (17.0g/cm³)</option>
-                            <option value={15.0}>タングステン80% (15.0g/cm³)</option>
-                            <option value={13.5}>タングステン70% (13.5g/cm³)</option>
+                            {MATERIAL_OPTIONS.map((m) => (
+                                <option key={m.density} value={m.density}>{m.name} ({m.density.toFixed(1)}g/cm³)</option>
+                            ))}
                         </select>
                     </div>
 
@@ -1201,7 +1213,7 @@ export const Editor = () => {
                 <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
                     <button
                         onClick={async () => {
-                            const result = await shareBarrelToX();
+                            const result = await shareBarrelToX(specText);
                             if (result.status === 'failed') {
                                 alert(`Xに投稿できませんでした: ${result.error}`);
                             }
@@ -1226,7 +1238,7 @@ export const Editor = () => {
                                 materialDensity, polygonZones,
                                 colorZones, accentColorName: colorEnName(accentColor),
                             };
-                            const result = await shareDxf(dxfInput);
+                            const result = await shareDxf(dxfInput, specText);
                             if (result.status === 'failed') {
                                 // アップロード失敗 → ローカルダウンロードにフォールバック
                                 exportToDxf(dxfInput);

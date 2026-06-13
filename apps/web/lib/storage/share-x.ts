@@ -103,7 +103,7 @@ const waitForRender = (): Promise<void> => new Promise((resolve) => {
     window.requestAnimationFrame(tick);
 });
 
-export const shareBarrelToX = async (): Promise<ShareToXResult> => {
+export const shareBarrelToX = async (specText?: string): Promise<ShareToXResult> => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
         return { status: 'failed', error: 'canvas not found' };
@@ -132,7 +132,9 @@ export const shareBarrelToX = async (): Promise<ShareToXResult> => {
     // 投稿本文にアプリ URL を含める。URL を落とすモバイルアプリ intent でも本文に入るよう、
     // url パラメータではなく本文に直接付加する (X は本文中の URL を自動リンク化する)。
     const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const postText = appUrl ? `${X_POST_TEXT}\n${appUrl}` : X_POST_TEXT;
+    // 見出し → スペック要約 → アプリ URL の順で本文を構成する。
+    const headline = specText ? `${X_POST_TEXT}\n\n${specText}` : X_POST_TEXT;
+    const postText = appUrl ? `${headline}\n${appUrl}` : headline;
     const webUrl = buildXIntentUrl(postText);
     const platform = detectPlatform();
 

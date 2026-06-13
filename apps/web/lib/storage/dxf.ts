@@ -704,7 +704,7 @@ export type ShareResult =
  * 注意: LINE 仕様により「ファイル添付済み」の状態で deep link を開くことは不可能。
  *       そのため URL を送る方式となる。受信側でURLをタップすればDXFがダウンロードされる。
  */
-export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promise<ShareResult> => {
+export const shareDxf = async (input: DxfBarrelInput, specText?: string, filename?: string): Promise<ShareResult> => {
     const dxf = generateDxf(input);
     const name = filename ?? buildFilename();
     const imageName = name.replace(/\.dxf$/i, '.png');
@@ -730,9 +730,13 @@ export const shareDxf = async (input: DxfBarrelInput, filename?: string): Promis
         }
     }
 
+    // 見出しの後にスペック要約を差し込み、その後にアップロード URL を続ける。
+    const intro = specText
+        ? `ORDER GRIP バレル設計のご相談\n\n${specText}`
+        : 'ORDER GRIP バレル設計のご相談';
     const message = imageUrl
-        ? `ORDER GRIP バレル設計のご相談\n■3Dイメージ: ${imageUrl}\n■DXF: ${dxfUrl}`
-        : `ORDER GRIP バレル設計のご相談\n■DXF: ${dxfUrl}`;
+        ? `${intro}\n\n■3Dイメージ: ${imageUrl}\n■DXF: ${dxfUrl}`
+        : `${intro}\n\n■DXF: ${dxfUrl}`;
 
     // 3. Basic ID で公式アカウントのチャットを直接開く (送付先選択不要、画像+DXF の URL 入り)
     if (LINE_OA_BASIC_ID) {
