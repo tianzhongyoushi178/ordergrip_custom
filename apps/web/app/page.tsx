@@ -23,29 +23,48 @@ export default function Home() {
         />
       </div>
 
-      {/* Reset Camera Button */}
-      <button
-        onClick={() => useBarrelStore.getState().triggerCameraReset()}
-        className="absolute top-4 right-4 z-10 bg-white/90 dark:bg-zinc-900/90 text-zinc-600 dark:text-zinc-300 p-2 rounded-lg shadow-lg hover:bg-white dark:hover:bg-zinc-800 transition-all active:scale-95 border border-zinc-200 dark:border-zinc-800"
-        title="視点をリセット"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-          <path d="M3 3v5h5" />
-        </svg>
-      </button>
+      {/* 上部右ツールバー: 戻す / 真横 / 視点リセット。
+          flex で自動整列し固定オフセットの衝突を避ける。常時表示でエディタのスクロールに影響されない。 */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {/* Undo Button */}
+        <button
+          onClick={() => undo()}
+          disabled={!canUndo}
+          title="戻す"
+          data-testid="undo-button"
+          className="flex items-center gap-1.5 bg-white/90 dark:bg-zinc-900/90 text-zinc-600 dark:text-zinc-300 px-3 py-2 rounded-lg shadow-lg hover:bg-white dark:hover:bg-zinc-800 transition-all active:scale-95 border border-zinc-200 dark:border-zinc-800 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h11a4 4 0 014 4v3" /></svg>
+          戻す
+        </button>
 
-      {/* Undo Button (上部に常時表示。エディタのスクロールに影響されない) */}
-      <button
-        onClick={() => undo()}
-        disabled={!canUndo}
-        title="戻す"
-        data-testid="undo-button"
-        className="absolute top-4 right-16 z-10 flex items-center gap-1.5 bg-white/90 dark:bg-zinc-900/90 text-zinc-600 dark:text-zinc-300 px-3 py-2 rounded-lg shadow-lg hover:bg-white dark:hover:bg-zinc-800 transition-all active:scale-95 border border-zinc-200 dark:border-zinc-800 text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14L4 9l5-5M4 9h11a4 4 0 014 4v3" /></svg>
-        戻す
-      </button>
+        {/* 真横ビュー Button */}
+        <button
+          onClick={() => useBarrelStore.getState().triggerCameraSide()}
+          title="真横から見る"
+          data-testid="side-view-button"
+          className="flex items-center gap-1.5 bg-white/90 dark:bg-zinc-900/90 text-zinc-600 dark:text-zinc-300 px-3 py-2 rounded-lg shadow-lg hover:bg-white dark:hover:bg-zinc-800 transition-all active:scale-95 border border-zinc-200 dark:border-zinc-800 text-xs font-bold"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12h18" />
+            <path d="M6 9l-3 3 3 3" />
+            <path d="M18 9l3 3-3 3" />
+          </svg>
+          真横
+        </button>
+
+        {/* Reset Camera Button */}
+        <button
+          onClick={() => useBarrelStore.getState().triggerCameraReset()}
+          className="bg-white/90 dark:bg-zinc-900/90 text-zinc-600 dark:text-zinc-300 p-2 rounded-lg shadow-lg hover:bg-white dark:hover:bg-zinc-800 transition-all active:scale-95 border border-zinc-200 dark:border-zinc-800"
+          title="視点をリセット"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+        </button>
+      </div>
 
       {/* 3D Scene Layer */}
       {/* Mobile: Top 40% height. Desktop: Full screen background */}

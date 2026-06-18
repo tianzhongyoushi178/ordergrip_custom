@@ -110,6 +110,9 @@ export interface BarrelState {
   // Camera Control
   cameraResetTrigger: number;
   triggerCameraReset: () => void;
+  // 真横ビュー (バレル長手=Z軸に直交する方向から見る) へのスナップ
+  cameraSideTrigger: number;
+  triggerCameraSide: () => void;
 
   // Active Cut (3Dハイライト用)
   activeCutId: string | null;
@@ -270,6 +273,8 @@ export const useBarrelStore = create<BarrelState>((set, get) => ({
 
   cameraResetTrigger: 0,
   triggerCameraReset: () => set((state) => ({ cameraResetTrigger: state.cameraResetTrigger + 1 })),
+  cameraSideTrigger: 0,
+  triggerCameraSide: () => set((state) => ({ cameraSideTrigger: state.cameraSideTrigger + 1 })),
 
   activeCutId: null,
   setActiveCutId: (id) => set({ activeCutId: id }),

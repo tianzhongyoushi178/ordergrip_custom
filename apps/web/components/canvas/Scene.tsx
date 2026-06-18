@@ -7,8 +7,15 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 import { Suspense, useEffect, useState, useRef, type ComponentRef } from 'react';
 
+// カメラ既定位置。アイソメを前後逆にする (チップ側 = -Z 方向から見下ろす)。
+// Canvas の初期 camera prop とリセットボタンの復帰先で共有し、両者を一致させる。
+const DEFAULT_CAMERA_POSITION: readonly [number, number, number] = [40, 30, -60];
+// 真横ビュー。バレル長手 (Z軸) に直交する +X から見て全長シルエットを表示する。
+// 既定アイソメと同じ +X 側に置き、スナップ時の回転ジャンプを最小化する。
+const SIDE_CAMERA_POSITION: readonly [number, number, number] = [85, 0, 0];
+
 export const Scene = () => {
-    const { length, cameraResetTrigger } = useBarrelStore();
+    const { length, cameraResetTrigger, cameraSideTrigger } = useBarrelStore();
     const [isMobile, setIsMobile] = useState(false);
     const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
 
@@ -28,10 +35,21 @@ export const Scene = () => {
         if (cameraResetTrigger === 0) return;
         if (controlsRef.current) {
             controlsRef.current.target.set(0, 0, 0);
-            controlsRef.current.object.position.set(40, 30, 60);
+            controlsRef.current.object.position.set(...DEFAULT_CAMERA_POSITION);
             controlsRef.current.update();
         }
     }, [cameraResetTrigger]);
+
+    // Side View Effect — 「真横」ボタン押下時にバレル長手(Z軸)へ直交する真横へスナップ。
+    // 初期値 0 のときは発火しない (cameraResetTrigger と同じガード)。
+    useEffect(() => {
+        if (cameraSideTrigger === 0) return;
+        if (controlsRef.current) {
+            controlsRef.current.target.set(0, 0, 0);
+            controlsRef.current.object.position.set(...SIDE_CAMERA_POSITION);
+            controlsRef.current.update();
+        }
+    }, [cameraSideTrigger]);
 
     const offset = 8; // mm gap from barrel end
     // ラベルは目印程度に。大きすぎるとバレル本体の視認を妨げるため抑えめ。
@@ -43,7 +61,7 @@ export const Scene = () => {
             shadows
             // Adjusted camera to fit 40-50mm barrel + labels. Distance ~80-100 units.
             // On mobile, we might want to zoom out a bit more?
-            camera={{ position: [40, 30, 60], fov: 35 }}
+            camera={{ position: [...DEFAULT_CAMERA_POSITION], fov: 35 }}
             className="absolute inset-0 z-0"
             // preserveDrawingBuffer: スクリーンショット (canvas.toBlob) を可能にする。
             // 通常は性能向上のためフレーム描画後にバッファをクリアするが、Xシェアで
