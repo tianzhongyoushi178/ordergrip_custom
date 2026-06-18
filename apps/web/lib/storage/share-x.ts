@@ -22,8 +22,7 @@
  * ※ Canvas は `preserveDrawingBuffer: true` (Scene.tsx で設定済み)。
  */
 
-import { dataUrlToBlobSync } from './capture';
-import { useBarrelStore } from '@/lib/store/useBarrelStore';
+import { dataUrlToBlobSync, resetToDefaultViewAndWait } from './capture';
 
 export const X_POST_TEXT =
     '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP';
@@ -86,36 +85,14 @@ const openMobileIntent = (platform: 'ios' | 'android', text: string, webFallback
     }
 };
 
-/**
- * 描画完了を待つ。triggerCameraReset → React コミット → Scene の effect(camera.update)
- * → R3F 再描画 を確実に跨ぐため数フレーム + 余白で待つ。RAF 不在時は setTimeout で代替。
- */
-const waitForRender = (): Promise<void> => new Promise((resolve) => {
-    if (typeof window === 'undefined' || typeof window.requestAnimationFrame === 'undefined') {
-        setTimeout(resolve, 80);
-        return;
-    }
-    let n = 0;
-    const tick = () => {
-        if (++n >= 3) setTimeout(resolve, 16);
-        else window.requestAnimationFrame(tick);
-    };
-    window.requestAnimationFrame(tick);
-});
-
 export const shareBarrelToX = async (specText?: string): Promise<ShareToXResult> => {
     const canvas = document.querySelector<HTMLCanvasElement>('canvas');
     if (!canvas) {
         return { status: 'failed', error: 'canvas not found' };
     }
 
-    // 初期の画角でスクリーンショットを撮るため、カメラを初期位置にリセットして描画完了を待つ
-    try {
-        useBarrelStore.getState().triggerCameraReset();
-        await waitForRender();
-    } catch {
-        // リセットに失敗してもキャプチャは続行する
-    }
+    // 共有画像は常に既定アイソメ視点で撮る (真横等の現在視点に依存させない)
+    await resetToDefaultViewAndWait();
 
     let dataUrl: string;
     try {

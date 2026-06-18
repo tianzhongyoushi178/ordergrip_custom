@@ -21,7 +21,7 @@
 import { DxfWriter, Colors, point2d, point3d, Units, LWPolylineFlags } from '@tarikjabiri/dxf';
 import type { BarrelState, CutZone, PolygonZone, ColorZone } from '@/lib/store/useBarrelStore';
 import { generateProfile } from '@/lib/math/generator';
-import { captureBarrelPngBlob } from './capture';
+import { captureBarrelPngBlob, resetToDefaultViewAndWait } from './capture';
 
 const HOLE_RADIUS = 2.1;
 const EPSILON = 1e-6;
@@ -720,6 +720,8 @@ export const shareDxf = async (input: DxfBarrelInput, specText?: string, filenam
 
     // 2. 3D レンダー画像をキャプチャしてアップロード (任意・失敗しても DXF だけで続行)
     //    画像はインライン表示させたいのでホスト生 URL(rawUrl) を使う。
+    //    キャプチャ前に既定アイソメ視点へ戻し、現在視点 (真横等) に依存しない画像にする。
+    await resetToDefaultViewAndWait();
     const imageBlob = captureBarrelPngBlob();
     let imageUrl: string | null = null;
     if (imageBlob) {

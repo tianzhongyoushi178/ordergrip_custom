@@ -4,6 +4,8 @@
  * X 共有 (share-x.ts) と LINE 相談 (dxf.ts shareDxf) で共用する。
  */
 
+import { useBarrelStore } from '@/lib/store/useBarrelStore';
+
 /** dataURL (data:image/png;base64,xxx) を同期で Blob に変換 */
 export const dataUrlToBlobSync = (dataUrl: string): Blob => {
     const commaIdx = dataUrl.indexOf(',');
@@ -33,4 +35,35 @@ export const captureBarrelPngBlob = (): Blob | null => {
     }
     if (!dataUrl || dataUrl === 'data:,') return null;
     return dataUrlToBlobSync(dataUrl);
+};
+
+/**
+ * 描画完了を待つ。triggerCameraReset → React コミット → Scene の effect(camera.update)
+ * → R3F 再描画 を確実に跨ぐため数フレーム + 余白で待つ。RAF 不在時は setTimeout で代替。
+ */
+export const waitForRender = (): Promise<void> => new Promise((resolve) => {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame === 'undefined') {
+        setTimeout(resolve, 80);
+        return;
+    }
+    let n = 0;
+    const tick = () => {
+        if (++n >= 3) setTimeout(resolve, 16);
+        else window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
+});
+
+/**
+ * キャプチャ前にカメラを既定アイソメ視点へ戻し、描画完了を待つ。
+ * X 投稿・LINE 相談の共有画像を、ユーザーの現在の視点 (真横等) に依存させず
+ * 常に既定アイソメで撮るために使う。リセット失敗時もキャプチャは続行する。
+ */
+export const resetToDefaultViewAndWait = async (): Promise<void> => {
+    try {
+        useBarrelStore.getState().triggerCameraReset();
+        await waitForRender();
+    } catch {
+        // リセットに失敗してもキャプチャは続行する
+    }
 };
