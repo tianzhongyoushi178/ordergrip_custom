@@ -25,7 +25,7 @@ export default function Home() {
 
       {/* 上部右ツールバー: 戻す / 真横 / 視点リセット。
           flex で自動整列し固定オフセットの衝突を避ける。常時表示でエディタのスクロールに影響されない。 */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+      <div className="absolute top-4 right-4 md:right-[21rem] z-10 flex items-center gap-2">
         {/* Undo Button */}
         <button
           onClick={() => undo()}
