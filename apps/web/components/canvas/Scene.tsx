@@ -12,7 +12,10 @@ import { Suspense, useEffect, useState, useRef, type ComponentRef } from 'react'
 const DEFAULT_CAMERA_POSITION: readonly [number, number, number] = [-40, 30, -60];
 // 真横ビュー。バレル長手 (Z軸) に直交する -X から見て全長シルエットを表示する。
 // 既定アイソメと同じ -X 側に置き、チップ側を画面左に揃える。
-const SIDE_CAMERA_POSITION: readonly [number, number, number] = [-85, 0, 0];
+// 注視点を SIDE_VIEW_TARGET_Y だけ上げてバレルを画面のやや下に配置する
+// (position/target の Y を同値にすることで視線は水平のまま = 真横を維持)。
+const SIDE_VIEW_TARGET_Y = 8;
+const SIDE_CAMERA_POSITION: readonly [number, number, number] = [-85, SIDE_VIEW_TARGET_Y, 0];
 
 export const Scene = () => {
     const { length, cameraResetTrigger, cameraSideTrigger } = useBarrelStore();
@@ -45,7 +48,7 @@ export const Scene = () => {
     useEffect(() => {
         if (cameraSideTrigger === 0) return;
         if (controlsRef.current) {
-            controlsRef.current.target.set(0, 0, 0);
+            controlsRef.current.target.set(0, SIDE_VIEW_TARGET_Y, 0);
             controlsRef.current.object.position.set(...SIDE_CAMERA_POSITION);
             controlsRef.current.update();
         }
