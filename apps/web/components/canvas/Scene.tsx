@@ -7,12 +7,12 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { useBarrelStore } from '@/lib/store/useBarrelStore';
 import { Suspense, useEffect, useState, useRef, type ComponentRef } from 'react';
 
-// カメラ既定位置。アイソメを前後逆にする (チップ側 = -Z 方向から見下ろす)。
+// カメラ既定位置。チップ側(-Z)が画面の左手前に来る向き (-X,-Z 側の上方から見下ろす)。
 // Canvas の初期 camera prop とリセットボタンの復帰先で共有し、両者を一致させる。
-const DEFAULT_CAMERA_POSITION: readonly [number, number, number] = [40, 30, -60];
-// 真横ビュー。バレル長手 (Z軸) に直交する +X から見て全長シルエットを表示する。
-// 既定アイソメと同じ +X 側に置き、スナップ時の回転ジャンプを最小化する。
-const SIDE_CAMERA_POSITION: readonly [number, number, number] = [85, 0, 0];
+const DEFAULT_CAMERA_POSITION: readonly [number, number, number] = [-40, 30, -60];
+// 真横ビュー。バレル長手 (Z軸) に直交する -X から見て全長シルエットを表示する。
+// 既定アイソメと同じ -X 側に置き、チップ側を画面左に揃える。
+const SIDE_CAMERA_POSITION: readonly [number, number, number] = [-85, 0, 0];
 
 export const Scene = () => {
     const { length, cameraResetTrigger, cameraSideTrigger } = useBarrelStore();
