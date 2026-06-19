@@ -56,6 +56,11 @@ export const Barrel = () => {
                     roughness={0.3}
                     metalness={0.8}
                     side={THREE.DoubleSide}
+                    // DoubleSide の既定 shadowSide は DoubleSide で、前後両面が
+                    // シャドウマップに書き込まれて自陰アクネ (=「シミ」) になる。
+                    // BackSide に固定し、裏面のみ書き込んで前面が自分自身を
+                    // 影と判定するのを防ぐ (Three.js での DoubleSide+shadows 推奨)。
+                    shadowSide={THREE.BackSide}
                 />
             </mesh>
             {activeCut && (

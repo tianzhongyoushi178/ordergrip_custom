@@ -87,7 +87,28 @@ export const Scene = () => {
                 </ErrorBoundary>
             </Suspense>
             <ambientLight intensity={0.4} />
-            <directionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
+            {/* directionalLight のシャドウは「シミ」(shadow acne / 範囲外サンプル) の主因となるため
+                ・ortho frustum をバレル最大長 (length<=150mm, 半径<=4.25mm) を完全に覆うサイズに固定
+                ・bias / normalBias でシェーディング法線と深度の浮動小数点誤差による自陰縞を抑止
+                ・mapSize を 2048 にして範囲拡張時の精細度低下を相殺
+                を明示する。default の ortho ±5 / bias=0 ではバレル端で黒シミ・しま模様が出る。
+                ortho frustum は <orthographicCamera attach="shadow-camera" .../> で差し替える。
+                shadow-camera-left 等の dash props はコンストラクタの updateProjectionMatrix を
+                経由しないため、ネストした OrthographicCamera で構築時に行列確定させるのが堅実。 */}
+            <directionalLight
+                position={[10, 10, 10]}
+                intensity={1.5}
+                castShadow
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
+                shadow-bias={-0.0005}
+                shadow-normalBias={0.05}
+            >
+                <orthographicCamera
+                    attach="shadow-camera"
+                    args={[-90, 90, 90, -90, 0.5, 300]}
+                />
+            </directionalLight>
 
             <group position={[0, 0, 0]}>
                 <Barrel />
