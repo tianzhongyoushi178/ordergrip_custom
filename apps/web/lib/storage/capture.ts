@@ -55,15 +55,16 @@ export const waitForRender = (): Promise<void> => new Promise((resolve) => {
 });
 
 /**
- * キャプチャ前にカメラを既定アイソメ視点へ戻し、描画完了を待つ。
- * X 投稿・LINE 相談の共有画像を、ユーザーの現在の視点 (真横等) に依存させず
- * 常に既定アイソメで撮るために使う。リセット失敗時もキャプチャは続行する。
+ * キャプチャ前にカメラを共有用の真横ビューへ切り替え、描画完了を待つ。
+ * X 投稿・LINE 相談の共有画像を、ユーザーの現在の視点に依存させず
+ * 常にバレル全長が横一直線に見える画像で撮るために使う。
+ * 切り替え失敗時もキャプチャは続行する。
  */
-export const resetToDefaultViewAndWait = async (): Promise<void> => {
+export const switchToSideShareViewAndWait = async (): Promise<void> => {
     try {
-        useBarrelStore.getState().triggerCameraReset();
+        useBarrelStore.getState().triggerCameraSide();
         await waitForRender();
     } catch {
-        // リセットに失敗してもキャプチャは続行する
+        // 切り替えに失敗してもキャプチャは続行する
     }
 };

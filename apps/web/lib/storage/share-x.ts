@@ -22,7 +22,7 @@
  * ※ Canvas は `preserveDrawingBuffer: true` (Scene.tsx で設定済み)。
  */
 
-import { dataUrlToBlobSync, resetToDefaultViewAndWait } from './capture';
+import { dataUrlToBlobSync, switchToSideShareViewAndWait } from './capture';
 
 export const X_POST_TEXT =
     '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP';
@@ -91,8 +91,8 @@ export const shareBarrelToX = async (specText?: string): Promise<ShareToXResult>
         return { status: 'failed', error: 'canvas not found' };
     }
 
-    // 共有画像は常に既定アイソメ視点で撮る (真横等の現在視点に依存させない)
-    await resetToDefaultViewAndWait();
+    // 共有画像は常に真横ビューで撮る (ユーザーの現在視点に依存させない)
+    await switchToSideShareViewAndWait();
 
     let dataUrl: string;
     try {
