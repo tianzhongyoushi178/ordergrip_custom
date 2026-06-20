@@ -1,5 +1,9 @@
 node_modules
 .next
+.turbo
 playwright-report
 test-results
+test-screenshots
+.claude
 *.log
+*.tsbuildinfo

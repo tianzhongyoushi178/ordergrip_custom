@@ -1,0 +1,13 @@
+# 改行コードはリポジトリ内では常に LF に正規化する。
+# Windows でのチェックアウト時に LF→CRLF 変換警告が出るのを防ぎ、OS 間で差分を安定させる。
+* text=auto eol=lf
+
+# バイナリは変換対象外
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.ico binary
+*.woff binary
+*.woff2 binary
