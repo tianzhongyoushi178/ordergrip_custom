@@ -79,10 +79,16 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_NO_SERVER
     ? undefined
     : {
-        command: 'pnpm --filter web exec next dev --webpack -p 3001',
+        // 既定は本番ビルドE2E (next build → next start)。dev のオンデマンド再コンパイルや
+        // HMR/SourceMap オーバーヘッドが無く、ページ読込・実行が速く本番と同条件で検証できる。
+        // 手早く反復したい時は PLAYWRIGHT_DEV=1 で従来の dev サーバへ切替可能。
+        command: process.env.PLAYWRIGHT_DEV
+          ? 'pnpm --filter web exec next dev --webpack -p 3001'
+          : 'pnpm --filter web exec next build --webpack && pnpm --filter web exec next start -p 3001',
         url: 'http://localhost:3001',
         reuseExistingServer: !process.env.CI,
-        timeout: 180_000,
+        // 本番ビルドの初回コンパイル時間を吸収する余裕を持たせる。
+        timeout: process.env.PLAYWRIGHT_DEV ? 180_000 : 600_000,
         stdout: 'pipe',
         stderr: 'pipe',
       },
