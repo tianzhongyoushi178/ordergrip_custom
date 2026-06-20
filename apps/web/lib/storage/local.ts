@@ -52,6 +52,18 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
     if (isFiniteNumber(raw.rearTaperLength) && raw.rearTaperLength >= 0) result.rearTaperLength = raw.rearTaperLength;
     if (isFiniteNumber(raw.holeDepthFront) && raw.holeDepthFront >= 0) result.holeDepthFront = raw.holeDepthFront;
     if (isFiniteNumber(raw.holeDepthRear) && raw.holeDepthRear >= 0) result.holeDepthRear = raw.holeDepthRear;
+    // 前後穴の合計が全長を超えないよう相互クランプ (旋盤プロファイル自己交差=黒/誤形状の防止)。
+    {
+        const lenForHole = isFiniteNumber(result.length) && result.length > 0 ? result.length : 45;
+        const maxSum = Math.max(0, lenForHole - 1);
+        const f = result.holeDepthFront ?? 0;
+        const r = result.holeDepthRear ?? 0;
+        if (f + r > maxSum && f + r > 0) {
+            const scale = maxSum / (f + r);
+            if (result.holeDepthFront !== undefined) result.holeDepthFront = f * scale;
+            if (result.holeDepthRear !== undefined) result.holeDepthRear = r * scale;
+        }
+    }
 
     if (typeof raw.shapeType === 'string' && ['torpedo', 'straight', 'custom'].includes(raw.shapeType)) {
         result.shapeType = raw.shapeType as BarrelState['shapeType'];
@@ -66,6 +78,7 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
             if (!isFiniteNumber(r.startZ) || !isFiniteNumber(r.endZ) || !isFiniteNumber(r.sides)) return;
             const sides = Math.round(r.sides);
             if (sides < 5 || sides > 11) return;
+            if (r.endZ <= r.startZ) return; // 逆転・ゼロ幅は除外 (多角形が無音で消えるのを防ぐ)
             zones.push({
                 id: typeof r.id === 'string' ? r.id : `pz-${i}`,
                 startZ: r.startZ,
@@ -90,18 +103,36 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
     }
 
     if (Array.isArray(raw.outline)) {
-        result.outline = raw.outline.filter(
-            (p): p is { z: number; d: number } =>
-                typeof p === 'object' && p !== null && isFiniteNumber(p.z) && isFiniteNumber(p.d)
-        );
+        result.outline = raw.outline
+            .filter((p): p is { z: number; d: number } =>
+                typeof p === 'object' && p !== null && isFiniteNumber(p.z) && isFiniteNumber(p.d))
+            // d は内穴(直径4.2)へ潜り込むと自己交差するため最小 5.6 にクランプ(OutlineEditor と整合)。
+            .map((p) => ({ z: Math.max(0, p.z), d: Math.max(5.6, p.d) }));
     }
 
     if (Array.isArray(raw.cuts)) {
-        result.cuts = raw.cuts.filter((c): c is BarrelState['cuts'][number] =>
-            typeof c === 'object' && c !== null &&
-            typeof c.id === 'string' && typeof c.type === 'string' &&
-            isFiniteNumber(c.startZ) && isFiniteNumber(c.endZ)
-        );
+        const lenForCut = isFiniteNumber(result.length) && result.length > 0 ? result.length : 100;
+        const validCuts: BarrelState['cuts'] = [];
+        raw.cuts.forEach((c) => {
+            if (typeof c !== 'object' || c === null) return;
+            const cc = c as BarrelState['cuts'][number];
+            if (typeof cc.id !== 'string' || typeof cc.type !== 'string') return;
+            if (!isFiniteNumber(cc.startZ) || !isFiniteNumber(cc.endZ)) return;
+            const startZ = Math.max(0, Math.min(lenForCut, cc.startZ));
+            const endZ = Math.max(0, Math.min(lenForCut, cc.endZ));
+            if (endZ <= startZ) return; // 逆転・ゼロ幅は除外 (カットが無音で消えるのを防ぐ)
+            const props = cc.properties ?? {};
+            const itemCount = isFiniteNumber(props.itemCount)
+                ? Math.min(64, Math.max(1, Math.round(props.itemCount)))
+                : undefined;
+            validCuts.push({
+                ...cc,
+                startZ,
+                endZ,
+                properties: itemCount !== undefined ? { ...props, itemCount } : { ...props },
+            });
+        });
+        result.cuts = validCuts.slice(0, 200); // 件数上限 (区間爆発による頂点増を防ぐ)
     }
 
     // アクセント色 (#RRGGBB) とカラー区間

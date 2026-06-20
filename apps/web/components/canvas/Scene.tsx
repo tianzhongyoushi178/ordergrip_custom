@@ -96,7 +96,10 @@ export const Scene = () => {
                 shadow-camera-left 等の dash props はコンストラクタの updateProjectionMatrix を
                 経由しないため、ネストした OrthographicCamera で構築時に行列確定させるのが堅実。 */}
             <directionalLight
-                position={[10, 10, 10]}
+                // 光源を遠ざける(原点距離17→208)。方向[0.577,...]は不変なので拡散/金属反射の
+                // 見た目は変わらず、長尺バレルが shadow-camera の near 平面の裏に落ちて
+                // 影が欠ける/縞・黒シミになる現象(L>58mm)を解消する。平行光は距離減衰なし。
+                position={[120, 120, 120]}
                 intensity={1.5}
                 castShadow
                 shadow-mapSize-width={2048}
@@ -106,12 +109,18 @@ export const Scene = () => {
             >
                 <orthographicCamera
                     attach="shadow-camera"
-                    args={[-90, 90, 90, -90, 0.5, 300]}
+                    // near/far は光源距離(~208)とバレル全長(<=150)の深度範囲を内包する値。
+                    // 左右(±90)は L=150/R=4.25 のビュー幅(±56/±35)を覆う。
+                    args={[-90, 90, 90, -90, 1, 400]}
                 />
             </directionalLight>
 
             <group position={[0, 0, 0]}>
-                <Barrel />
+                {/* 極端設定で generateBarrelGeometry が巨大バッファ確保に失敗/例外を投げても
+                    Canvas 全体が落ちないよう Barrel を隔離する(頂点キャップが一次防御、これは保険)。 */}
+                <ErrorBoundary fallback={null}>
+                    <Barrel />
+                </ErrorBoundary>
 
                 {/* ラベル(drei Text)は troika が外部CDNからフォントを取得する。
                     取得失敗でシーンが落ちないよう Suspense + ErrorBoundary で隔離する。 */}

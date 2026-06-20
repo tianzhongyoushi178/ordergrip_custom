@@ -1,6 +1,30 @@
 import { create } from 'zustand';
 import { DEFAULT_ACCENT_COLOR } from '../colors';
 
+/** 数値を [min,max] にクランプ。非有限値(NaN/Infinity)や非数は fallback を返す。 */
+const clampNum = (v: unknown, min: number, max: number, fallback: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+
+// 寸法の許容範囲 (UIスライダと一致)。信頼境界 (updateDimension/setAll) で強制し、
+// SpecWizard/PDF/インポート由来の不正値が generator/physics へ素通りするのを防ぐ。
+const LENGTH_MIN = 20, LENGTH_MAX = 150;
+const DIAMETER_MIN = 5.5, DIAMETER_MAX = 8.5;
+const HOLE_WALL = 1; // 前後穴底の間に残す最低肉厚 mm
+
+/** 前後穴の合計が全長を超えないよう相互クランプ (旋盤プロファイル自己交差=黒/誤形状の防止)。 */
+const clampHoles = (length: number, hf: number, hr: number): { holeDepthFront: number; holeDepthRear: number } => {
+  const maxSum = Math.max(0, length - HOLE_WALL);
+  let f = Math.max(0, Number.isFinite(hf) ? hf : 0);
+  let r = Math.max(0, Number.isFinite(hr) ? hr : 0);
+  if (f + r > maxSum) {
+    const total = f + r;
+    const scale = total > 0 ? maxSum / total : 0;
+    f = f * scale;
+    r = r * scale;
+  }
+  return { holeDepthFront: f, holeDepthRear: r };
+};
+
 export type CutType =
   | 'ring' | 'ring_double' | 'ring_triple'
   | 'ring_r' | 'ring_v'
@@ -183,7 +207,19 @@ export const useBarrelStore = create<BarrelState>((set, get) => ({
   cuts: [],
 
   // 寸法変更は taper ベースの形状を維持。明示的な「カスタム」ボタン押下でのみ outline モードに移行。
-  updateDimension: (key, value) => set((state) => ({ ...state, [key]: value })),
+  updateDimension: (key, value) => set((state) => {
+    // 値ごとに UI 範囲へクランプし、不正値(NaN/0/負/極端)が generator/physics へ届くのを防ぐ。
+    let v: number;
+    if (key === 'length') v = clampNum(value, LENGTH_MIN, LENGTH_MAX, state.length);
+    else if (key === 'maxDiameter') v = clampNum(value, DIAMETER_MIN, DIAMETER_MAX, state.maxDiameter);
+    else v = clampNum(value, 0, state.length, state[key]); // taper / holeDepth は 0..length
+    const next = { ...state, [key]: v };
+    // 前後穴の相互クランプ (length 変更時の追従も含む)。
+    const holes = clampHoles(next.length, next.holeDepthFront, next.holeDepthRear);
+    next.holeDepthFront = holes.holeDepthFront;
+    next.holeDepthRear = holes.holeDepthRear;
+    return next;
+  }),
   updateEndShape: (which, shape) => set((state) => ({
     ...state,
     ...(which === 'front' ? { frontEndShape: shape } : { rearEndShape: shape }),
@@ -213,7 +249,19 @@ export const useBarrelStore = create<BarrelState>((set, get) => ({
   })),
 
   updateCut: (id, cut) => set((state) => ({
-    cuts: state.cuts.map((c) => c.id === id ? { ...c, ...cut } : c)
+    cuts: state.cuts.map((c) => {
+      if (c.id !== id) return c;
+      const merged = { ...c, ...cut };
+      // 本数(itemCount)を 1..64 にクランプ。巨大値で頂点爆発→モバイル WebGL
+      // コンテキストロス(描画消失/真っ黒)になるのを防ぐ。市販バレルは20〜40本。
+      if (cut.properties && typeof cut.properties.itemCount === 'number') {
+        const ic = Number.isFinite(cut.properties.itemCount)
+          ? Math.min(64, Math.max(1, Math.round(cut.properties.itemCount)))
+          : 12;
+        return { ...merged, properties: { ...merged.properties, itemCount: ic } };
+      }
+      return merged;
+    })
   })),
 
   setMaterialDensity: (density) => set({ materialDensity: density }),
@@ -269,7 +317,18 @@ export const useBarrelStore = create<BarrelState>((set, get) => ({
     set({ ...prev, past: s.past.slice(0, -1) });
     isUndoing = false;
   },
-  setAll: (newState) => set((state) => ({ ...state, ...newState })),
+  setAll: (newState) => set((state) => {
+    // 信頼境界: SpecWizard/PDF/インポート由来の数値を UI 範囲へクランプし不正値を遮断。
+    const merged = { ...state, ...newState };
+    if ('length' in newState) merged.length = clampNum(newState.length, LENGTH_MIN, LENGTH_MAX, state.length);
+    if ('maxDiameter' in newState) merged.maxDiameter = clampNum(newState.maxDiameter, DIAMETER_MIN, DIAMETER_MAX, state.maxDiameter);
+    if ('frontTaperLength' in newState) merged.frontTaperLength = clampNum(newState.frontTaperLength, 0, merged.length, state.frontTaperLength);
+    if ('rearTaperLength' in newState) merged.rearTaperLength = clampNum(newState.rearTaperLength, 0, merged.length, state.rearTaperLength);
+    const holes = clampHoles(merged.length, merged.holeDepthFront, merged.holeDepthRear);
+    merged.holeDepthFront = holes.holeDepthFront;
+    merged.holeDepthRear = holes.holeDepthRear;
+    return merged;
+  }),
 
   cameraResetTrigger: 0,
   triggerCameraReset: () => set((state) => ({ cameraResetTrigger: state.cameraResetTrigger + 1 })),

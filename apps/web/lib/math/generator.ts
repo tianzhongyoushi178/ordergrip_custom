@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import { CutZone, EndShape, OutlineInterp, PolygonZone, ColorZone } from '../store/useBarrelStore';
 
+/** 内穴半径 (2BA, mm)。generateProfile の端部半径下限と generateBarrelGeometry の穴壁で共有。 */
+const HOLE_RADIUS = 2.1;
+/** 内穴のある端部での外面半径下限 (内穴へ潜り込む自己交差=黒/シミを防ぐ余裕)。 */
+const HOLE_OUTER_MIN_R = HOLE_RADIUS + 0.15;
+/** 総頂点数 (cols×rows) の安全弁。これを超えないよう円周分割を動的に下げ、
+ *  モバイル WebGL コンテキストロス(描画消失/真っ黒)を防ぐ。 */
+const MAX_TOTAL_VERTS = 300000;
+
 /**
  * アウトラインの d(z) を制御点間で補間する。
  * 'linear': 折れ線
@@ -66,7 +74,7 @@ const endRadius = (
     baseR: number,
     shape: EndShape
 ): number => {
-    if (taperLen <= 0) return baseR;
+    if (!(taperLen > 0)) return baseR;
     const t = Math.min(1, Math.max(0, distFromEnd / taperLen));
     if (shape === 'round') {
         // 凹R: 楕円弧で先端付近は細いまま、根元で急に膨らむ。
@@ -180,6 +188,8 @@ export const generateProfile = (
     frontEndShape: EndShape = 'taper',
     rearEndShape: EndShape = 'taper',
     outlineInterp: OutlineInterp = 'smooth',
+    holeDepthFront: number = 0,
+    holeDepthRear: number = 0,
 ): THREE.Vector2[] => {
     const points: THREE.Vector2[] = [];
     const baseRadius = maxDiameter / 2;
@@ -223,7 +233,9 @@ export const generateProfile = (
         // 2. Apply Cuts
         for (const cut of cuts) {
             if (z >= cut.startZ && z < cut.endZ) {
-                const depth = cut.properties.depth || 0.5;
+                // 溝深さを局所半径基準でプリクランプ。過大 depth でバレルが r=0.5 まで
+                // 潰れる「ちぎれ」誤形状を物理的に発生不能にする(テーパ端/outline/累積過削りにも有効)。
+                const depth = Math.min(cut.properties.depth || 0.5, Math.max(0, r - 0.5));
                 const pitch = cut.properties.pitch || 1.0;
 
                 // Relative Z in the cut zone
@@ -371,8 +383,13 @@ export const generateProfile = (
             }
         }
 
-        // Clamp radius to min 0.5mm to avoid artifacts or holes
-        if (r < 0.5) r = 0.5;
+        // 半径下限。端部(内穴がある区間)では外面が内穴(HOLE_RADIUS)へ潜り込むと
+        // 旋盤メッシュが自己交差し法線/影が破綻する(黒/シミ)ため下限を上げる。
+        // 穴のない中央部は従来どおり 0.5mm 下限。
+        const inFrontHole = holeDepthFront > 0 && z <= holeDepthFront;
+        const inRearHole = holeDepthRear > 0 && z >= length - holeDepthRear;
+        const minR = (inFrontHole || inRearHole) ? HOLE_OUTER_MIN_R : 0.5;
+        if (r < minR) r = minR;
 
         points.push(new THREE.Vector2(r, z));
     }
@@ -568,8 +585,21 @@ export const generateBarrelGeometry = (
     colorZones: ColorZone[] = [],
     accentColor: string = '#D1D5DB',
 ): THREE.BufferGeometry => {
+    // 穴深さ防御クランプ: 前穴底(z=hdF)と後穴底(z=length-hdR)が逆転すると旋盤プロファイルが
+    // 自己交差し法線反転(黒/誤形状)になる。store/local.ts でもクランプ済だが、旧localStorage
+    // データ等の最終防壁として、中央に最低1mmの肉を残すよう前後穴を相互クランプする。
+    const maxHoleSum = Math.max(0, length - 1);
+    let hdF = Math.max(0, holeDepthFront);
+    let hdR = Math.max(0, holeDepthRear);
+    if (hdF + hdR > maxHoleSum) {
+        const total = hdF + hdR;
+        const scale = total > 0 ? maxHoleSum / total : 0;
+        hdF = hdF * scale;
+        hdR = hdR * scale;
+    }
+
     // 1. Get Base Profile (Outer surface only)
-    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp);
+    const outerPoints = generateProfile(length, maxDiameter, cuts, frontTaperLen, rearTaperLen, outline, frontEndShape, rearEndShape, outlineInterp, hdF, hdR);
 
     // 円周方向分割数(ローレット系があれば共通ヘルパで算出)。本数に応じて溝幅に十分な
     // 頂点を確保しつつ、本数が少なくても下限 KNURL_RADIAL_MIN で円筒・斜め溝を滑らかに保つ。
@@ -603,16 +633,16 @@ export const generateBarrelGeometry = (
 
     // 2. Construct FULL Profile (Inner -> Outer -> Inner)
     // 2BA Hole Radius approx 2.1mm
-    const holeRadius = 2.1;
+    const holeRadius = HOLE_RADIUS;
     const points: THREE.Vector2[] = [];
 
     // --- FRONT HOLE INNER ---
     // Start from bottom of front hole (Center Axis) -> (Hole Radius)
-    points.push(new THREE.Vector2(0.001, holeDepthFront));
+    points.push(new THREE.Vector2(0.001, hdF));
 
     // Subdivide Front Hole Wall
     const holeWallRes = 0.2; // Resolution for threads
-    for (let h = holeDepthFront; h >= 0; h -= holeWallRes) {
+    for (let h = hdF; h >= 0; h -= holeWallRes) {
         if (h < 0) h = 0;
         points.push(new THREE.Vector2(holeRadius, h));
         if (h === 0) break;
@@ -658,15 +688,15 @@ export const generateBarrelGeometry = (
     // Next point is Rear Lip (holeRadius, length).
     // Then wall down to (holeRadius, length - depth).
 
-    for (let z = length; z >= length - holeDepthRear; z -= holeWallRes) {
+    for (let z = length; z >= length - hdR; z -= holeWallRes) {
         // Prevent going below bottom
-        if (z < length - holeDepthRear) z = length - holeDepthRear;
+        if (z < length - hdR) z = length - hdR;
         points.push(new THREE.Vector2(holeRadius, z));
-        if (z === length - holeDepthRear) break;
+        if (z === length - hdR) break;
     }
 
     // Point N+2: Center Axis at Depth
-    points.push(new THREE.Vector2(0.001, length - holeDepthRear));
+    points.push(new THREE.Vector2(0.001, length - hdR));
 
     // 3. Build Mesh Data
     // Pre-filter circumferential (knurl) cuts: 縦溝/斜目/綾目 (3Dで周方向に溝を掘る)
@@ -685,6 +715,13 @@ export const generateBarrelGeometry = (
     let radialSegments = knurlRS > 0 ? knurlRS : (hasPolygon ? 128 : 64);
     if (hasPolygon) radialSegments = Math.max(radialSegments, 128);
     radialSegments = Math.min(radialSegments, KNURL_RADIAL_MAX);
+    // 総頂点数 (cols×rows) の安全弁。rows(=points.length) は確定済みなので円周分割だけを下げ、
+    // cols*rows<=MAX_TOTAL_VERTS に収める (meshZ/物理経路は不変)。極端設定でのモバイル
+    // WebGL コンテキストロス(描画消失/真っ黒)を防ぐ。
+    if (points.length > 1) {
+        const maxRadial = Math.max(8, Math.floor(MAX_TOTAL_VERTS / points.length) - 1);
+        if (radialSegments > maxRadial) radialSegments = maxRadial;
+    }
     for (let j = 0; j <= radialSegments; j++) {
         ring.push({
             theta: (j / radialSegments) * Math.PI * 2,
@@ -764,7 +801,13 @@ export const generateBarrelGeometry = (
                 // 周方向の溝 (縦溝/斜目/綾目)。斜目・綾目は Z に沿って溝をねじる。
                 for (const kCut of knurlCuts) {
                     if (y >= kCut.startZ && y < kCut.endZ) {
-                        const count = kCut.properties.itemCount || 12;
+                        const rawCount = kCut.properties.itemCount || 12;
+                        // 円周分割(radialSegments)で「6頂点/溝」を表現できる本数に制限。超えると
+                        // 溝が1〜2頂点に潰れ法線が乱れてギラつき(知覚的シミ)になる。
+                        const renderableGrooves = Math.max(1, Math.floor(
+                            (radialSegments * Math.max(KNURL_MIN_GROOVE_FRACTION, kCut.properties.grooveFraction ?? 0.5)) / KNURL_MIN_VERTS_PER_GROOVE,
+                        ));
+                        const count = Math.min(rawCount, renderableGrooves);
                         // 入力正規化は重量計算(makeKnurlAreaRemovedFn)と共通化し、見た目と重量を必ず一致させる。
                         const { depthMm: vDepth, grooveFraction, bottomShape } = sanitizeKnurlProps(kCut.properties);
                         const segmentRad = (Math.PI * 2) / count;
