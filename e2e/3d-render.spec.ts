@@ -1,11 +1,11 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, TestInfo } from '@playwright/test';
 
 /**
  * 3D描画 (Three.js / react-three-fiber) の「シミ」 (shadow acne / 範囲外シャドウサンプル) を
  * リグレッション検知する。pixel-perfect snapshot を持たない代わりに、以下を機械的に検証する:
  *   - WebGL コンテキスト初期化失敗が無い
  *   - Canvas が実描画している (preserveDrawingBuffer=true なので toDataURL で取得できる)
- *   - 視覚条件 (初期, カットあり, カラーあり, 真横ビュー, 共有画像撮影後) で
+ *   - 視覚条件 (初期, カットあり, カラーあり, 真横ビュー, 共有画像撮影後, 最大寸法) で
  *     スクリーンショットを残し、目視/CI artifact 比較が出来るようにする
  *
  * Three.js の lighting/shadow 設定変更が再発しないかの最低限のガード。
@@ -25,6 +25,25 @@ const findCanvas = async (page: Page) => {
 };
 
 /**
+ * Canvas を toDataURL でキャプチャして artifact 添付する。
+ * WebGL canvas に対する locator.screenshot() は「element to be stable」待ちで
+ * タイムアウトしやすい(連続描画のため)。preserveDrawingBuffer=true を前提に
+ * canvas 自身の toDataURL から PNG を得る方が確実(sampleCanvasPixels と同じ機構)。
+ */
+const attachCanvas = async (page: Page, testInfo: TestInfo, name: string) => {
+  const dataUrl = await page.evaluate(() => {
+    const c = document.querySelector('canvas');
+    return c ? c.toDataURL('image/png') : null;
+  });
+  if (dataUrl && dataUrl.startsWith('data:image/png')) {
+    await testInfo.attach(name, {
+      body: Buffer.from(dataUrl.split(',')[1], 'base64'),
+      contentType: 'image/png',
+    });
+  }
+};
+
+/**
  * Canvas を toDataURL でキャプチャし、全画素 (alpha無視) の RGB ヒストグラムを返す。
  * 全黒 / 全白 / 単色になっていたら描画が破綻している。
  */
@@ -41,6 +60,11 @@ const sampleCanvasPixels = async (page: Page) => {
     c2.height = h;
     const ctx = c2.getContext('2d');
     if (!ctx) return null;
+    // R3F Canvas は透明(alpha:true)で、その下の暗い CSS 背景(#0a0a0a)が見えている。
+    // toDataURL の透明画素を純黒(0,0,0)として読むと背景全体が「黒シミ」に誤カウントされるため、
+    // 実際の表示背景色(輝度10>暗判定閾値8)を下地に塗ってから合成し、見たままを測る。
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
     ctx.drawImage(canvas, 0, 0);
     const data = ctx.getImageData(0, 0, w, h).data;
     let rSum = 0, gSum = 0, bSum = 0;
@@ -117,32 +141,39 @@ const mockShareSideEffects = async (page: Page) => {
   });
 };
 
+/**
+ * range スライダを最大値へ。focus+End はタッチ端末(iPad等)で actionable 待ちになり
+ * 不安定なため、React 制御 input の native value setter で max を入れ input/change を
+ * 発火させる(全デバイスで確実・高速)。
+ */
+const sliderToMax = async (page: Page, index: number) => {
+  const slider = page.getByRole('slider').nth(index);
+  await slider.waitFor({ state: 'visible', timeout: 10_000 });
+  await slider.evaluate((el) => {
+    const input = el as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, input.max);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+};
+
 test.describe('3D描画リグレッション', () => {
   test('初期表示: バレルが描画されている (全黒 / 全白 / 全シミ ではない)', async ({ page }, testInfo) => {
     await page.goto('/');
     await skipWizard(page);
-    const canvas = await findCanvas(page);
+    await findCanvas(page);
     // 描画完了まで少し待つ (シャドウマップ・Environment 取得など)
     await page.waitForTimeout(1500);
 
-    await testInfo.attach('3d-initial.png', {
-      body: await canvas.screenshot(),
-      contentType: 'image/png',
-    });
-
-    const stats = await sampleCanvasPixels(page);
-    expect(stats, 'canvas pixel stats').not.toBeNull();
-    if (!stats) return;
-    // バレル本体が描画されている = 中間明度の画素が一定割合存在する
-    expect(stats.nonBgRatio, '中間明度画素割合 (バレル本体)').toBeGreaterThan(0.01);
-    // 暗黒画素が支配的でない = シャドウ範囲外サンプリングで真っ黒シミが広がっていない
-    expect(stats.darkRatio, '黒シミ画素割合').toBeLessThan(0.5);
+    await attachCanvas(page, testInfo, '3d-initial.png');
+    await assertHealthyCanvas(page);
   });
 
   test('真横ビュー: 真横ボタンでカメラスナップ後も健全な描画', async ({ page }, testInfo) => {
     await page.goto('/');
     await skipWizard(page);
-    const canvas = await findCanvas(page);
+    await findCanvas(page);
     await page.waitForTimeout(1000);
 
     // 真横ボタン (page.tsx の固定ツールバー)
@@ -152,22 +183,14 @@ test.describe('3D描画リグレッション', () => {
       await page.waitForTimeout(800);
     }
 
-    await testInfo.attach('3d-side-view.png', {
-      body: await canvas.screenshot(),
-      contentType: 'image/png',
-    });
-
-    const stats = await sampleCanvasPixels(page);
-    expect(stats).not.toBeNull();
-    if (!stats) return;
-    expect(stats.nonBgRatio).toBeGreaterThan(0.01);
-    expect(stats.darkRatio).toBeLessThan(0.5);
+    await attachCanvas(page, testInfo, '3d-side-view.png');
+    await assertHealthyCanvas(page);
   });
 
   test('視点リセット後も健全な描画', async ({ page }, testInfo) => {
     await page.goto('/');
     await skipWizard(page);
-    const canvas = await findCanvas(page);
+    await findCanvas(page);
     await page.waitForTimeout(1000);
 
     const resetBtn = page.getByRole('button', { name: /視点をリセット|リセット/ });
@@ -176,60 +199,65 @@ test.describe('3D描画リグレッション', () => {
       await page.waitForTimeout(500);
     }
 
-    await testInfo.attach('3d-after-reset.png', {
-      body: await canvas.screenshot(),
-      contentType: 'image/png',
-    });
-
-    const stats = await sampleCanvasPixels(page);
-    expect(stats).not.toBeNull();
-    if (!stats) return;
-    expect(stats.nonBgRatio).toBeGreaterThan(0.01);
-    expect(stats.darkRatio).toBeLessThan(0.5);
+    await attachCanvas(page, testInfo, '3d-after-reset.png');
+    await assertHealthyCanvas(page);
   });
 
   test('カットあり: リングカット追加後も健全な描画', async ({ page }, testInfo) => {
     await openEditor(page);
-    const canvas = await findCanvas(page);
 
     await addRingCut(page);
     await page.waitForTimeout(1000);
 
-    await testInfo.attach('3d-with-cut.png', {
-      body: await canvas.screenshot(),
-      contentType: 'image/png',
-    });
+    await attachCanvas(page, testInfo, '3d-with-cut.png');
     await assertHealthyCanvas(page);
   });
 
   test('カラーあり: カラー区間追加後も健全な描画', async ({ page }, testInfo) => {
     await openEditor(page);
-    const canvas = await findCanvas(page);
 
     await addBlueColorZone(page);
     await page.waitForTimeout(1000);
 
-    await testInfo.attach('3d-with-color-zone.png', {
-      body: await canvas.screenshot(),
-      contentType: 'image/png',
-    });
+    await attachCanvas(page, testInfo, '3d-with-color-zone.png');
     await assertHealthyCanvas(page);
   });
 
-  test('共有画像後: X投稿用の真横キャプチャ後も健全な描画', async ({ page }, testInfo) => {
+  test('共有画像後: X投稿用のキャプチャ後も健全な描画', async ({ page }, testInfo) => {
     await mockShareSideEffects(page);
     await openEditor(page);
-    const canvas = await findCanvas(page);
 
     await addRingCut(page);
     await addBlueColorZone(page);
     await clickButton(page, /バレル画像をXに投稿/);
     await page.waitForTimeout(1000);
 
-    await testInfo.attach('3d-after-share-capture.png', {
-      body: await canvas.screenshot(),
-      contentType: 'image/png',
-    });
+    await attachCanvas(page, testInfo, '3d-after-share-capture.png');
+    await assertHealthyCanvas(page);
+  });
+
+  test('意地悪: 全長/最大径を最大にしても健全な描画 (長尺バレルの影シミ防止)', async ({ page }, testInfo) => {
+    await openEditor(page);
+
+    // 全長スライダ(1番目)・最大径スライダ(2番目)を最大へ。
+    // 全長 150mm は影カメラ near 平面の裏に落ちて影が破綻していた条件(bug7)。
+    await sliderToMax(page, 0);
+    await sliderToMax(page, 1);
+    await page.waitForTimeout(1200);
+
+    await attachCanvas(page, testInfo, '3d-max-dims.png');
+    await assertHealthyCanvas(page);
+  });
+
+  test('意地悪: 最大寸法 + リングカットでも健全な描画', async ({ page }, testInfo) => {
+    await openEditor(page);
+
+    await sliderToMax(page, 0);
+    await sliderToMax(page, 1);
+    await addRingCut(page);
+    await page.waitForTimeout(1200);
+
+    await attachCanvas(page, testInfo, '3d-max-dims-cut.png');
     await assertHealthyCanvas(page);
   });
 });

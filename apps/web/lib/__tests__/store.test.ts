@@ -280,8 +280,9 @@ describe('useBarrelStore', () => {
     });
 
     it('設計変更後に undo で元に戻る', () => {
-      useBarrelStore.getState().updateDimension('maxDiameter', 9.0);
-      expect(useBarrelStore.getState().maxDiameter).toBe(9.0);
+      // maxDiameter は UI 範囲 5.5..8.5 にクランプされるため範囲内の値で undo を検証する。
+      useBarrelStore.getState().updateDimension('maxDiameter', 8.0);
+      expect(useBarrelStore.getState().maxDiameter).toBe(8.0);
       expect(useBarrelStore.getState().past.length).toBeGreaterThan(0);
       useBarrelStore.getState().undo();
       expect(useBarrelStore.getState().maxDiameter).toBe(7.0);
