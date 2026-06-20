@@ -151,7 +151,7 @@ export const Editor = () => {
         return calculatePhysics(points, materialDensity, holeDepthFront, holeDepthRear, (z) => polygonAreaFactor(polygonSidesAt(polygonZones, z)), knurlAreaAt);
     }, [length, maxDiameter, cuts, frontTaperLength, rearTaperLength, materialDensity, holeDepthFront, holeDepthRear, outline, outlineInterp, frontEndShape, rearEndShape, polygonZones]);
 
-    // X 投稿 / LINE 相談の本文に差し込むスペック要約 (材質・最大径・全長・重量・重心位置)。
+    // X 投稿 / LINE 相談の本文に差し込むスペック要約 (材質・最大径・全長・重量・重心位置・カット)。
     const specText = useMemo(
         () => buildSpecSummary({
             materialDensity,
@@ -159,8 +159,9 @@ export const Editor = () => {
             length,
             weight: physics.weight,
             centerOfGravity: physics.centerOfGravity,
+            cuts,
         }),
-        [materialDensity, maxDiameter, length, physics.weight, physics.centerOfGravity],
+        [materialDensity, maxDiameter, length, physics.weight, physics.centerOfGravity, cuts],
     );
 
     // Mobile toggle removed for split view

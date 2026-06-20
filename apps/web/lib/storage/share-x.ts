@@ -25,7 +25,7 @@
 import { dataUrlToBlobSync, switchToSideShareViewAndWait } from './capture';
 
 export const X_POST_TEXT =
-    '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP';
+    '世界で1つだけのオリジナルダーツバレルを設計しました! #JustOneGRIP\nリプや引用リポスト大歓迎';
 
 // X 公式の現行ドメイン。iOS Universal Links / Android App Links は x.com で登録されている。
 export const X_INTENT_URL_BASE = 'https://x.com/intent/post';
