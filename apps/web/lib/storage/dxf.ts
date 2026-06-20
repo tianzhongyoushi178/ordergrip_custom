@@ -634,13 +634,15 @@ export const generateDxf = (input: DxfBarrelInput): string => {
         const cTop = baseR + 9;
         for (const cz of cZones) {
             const midZ = (cz.startZ + cz.endZ) / 2;
+            // 塗り対象を製造側へ明示 (溝のみ=GROOVE / 溝以外=LAND / 全周=注記なし)。ASCII安全な接尾辞。
+            const targetSuffix = cz.target === 'groove' ? ' GROOVE' : cz.target === 'land' ? ' LAND' : '';
             dxf.addLine(point3d(cz.startZ, cBot, 0), point3d(cz.startZ, cTop, 0), { layerName: 'COLOR' });
             dxf.addLine(point3d(cz.endZ, cBot, 0), point3d(cz.endZ, cTop, 0), { layerName: 'COLOR' });
             dxf.addLine(point3d(cz.startZ, cTop, 0), point3d(cz.endZ, cTop, 0), { layerName: 'COLOR' });
             dxf.addText(
                 point3d(midZ - 6, cTop + 0.5, 0),
                 1.8,
-                `COLOR ${input.accentColorName} z${cz.startZ.toFixed(0)}-${cz.endZ.toFixed(0)}`,
+                `COLOR ${input.accentColorName} z${cz.startZ.toFixed(0)}-${cz.endZ.toFixed(0)}${targetSuffix}`,
                 { layerName: 'COLOR' },
             );
         }

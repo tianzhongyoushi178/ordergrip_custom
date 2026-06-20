@@ -1,4 +1,4 @@
-import { BarrelState, PolygonZone, ColorZone } from '@/lib/store/useBarrelStore';
+import { BarrelState, PolygonZone, ColorZone, ColorTarget } from '@/lib/store/useBarrelStore';
 
 export const STORAGE_KEY = 'dart-barrel-design';
 
@@ -146,10 +146,12 @@ export const validateBarrelData = (json: unknown): Partial<BarrelState> => {
             const r = z as Record<string, unknown>;
             if (!isFiniteNumber(r.startZ) || !isFiniteNumber(r.endZ)) return;
             if (r.startZ >= r.endZ) return; // 逆転・ゼロ幅区間は除外 (着色が無音で消えるのを防ぐ)
+            const target: ColorTarget = (r.target === 'groove' || r.target === 'land') ? r.target : 'all';
             czones.push({
                 id: typeof r.id === 'string' ? r.id : `cz-${i}`,
                 startZ: r.startZ,
                 endZ: r.endZ,
+                target,
             });
         });
         result.colorZones = czones;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useBarrelStore, CutType } from '@/lib/store/useBarrelStore';
+import { useBarrelStore, CutType, ColorTarget } from '@/lib/store/useBarrelStore';
 import { generateProfile, polygonAreaFactor, polygonSidesAt, makeKnurlAreaRemovedFn } from '@/lib/math/generator';
 import { BARREL_COLORS, colorEnName } from '@/lib/colors';
 import { calculatePhysics } from '@/lib/math/physics';
@@ -619,7 +619,7 @@ export const Editor = () => {
 
                         {colorZones.length === 0 && (
                             <p className="text-[11px] text-zinc-400 mb-2">
-                                未設定（全体が金属色）。区間を追加すると、その範囲が選択色になります。
+                                未設定（全体が金属色）。区間を追加すると、その範囲が選択色になります。塗り対象で「溝のみ／溝以外（山だけ）」も選べます。
                             </p>
                         )}
 
@@ -666,6 +666,18 @@ export const Editor = () => {
                                             </svg>
                                         </button>
                                     </div>
+                                    <label className="mt-2 flex items-center gap-2 text-[10px] text-zinc-400">
+                                        塗り対象
+                                        <select
+                                            value={zone.target ?? 'all'}
+                                            onChange={(e) => updateColorZone(zone.id, { target: e.target.value as ColorTarget })}
+                                            className="flex-1 p-1 text-xs bg-zinc-100 dark:bg-zinc-800 rounded border border-zinc-200 dark:border-zinc-700"
+                                        >
+                                            <option value="all">全面（全周）</option>
+                                            <option value="groove">溝のみ（縦カットの溝の中）</option>
+                                            <option value="land">溝以外（山だけ）</option>
+                                        </select>
+                                    </label>
                                 </div>
                             ))}
                         </div>
@@ -676,6 +688,7 @@ export const Editor = () => {
                                 id: Math.random().toString(36).substr(2, 9),
                                 startZ: Math.round((length / 3) * 10) / 10,
                                 endZ: Math.round((length * 2 / 3) * 10) / 10,
+                                target: 'all',
                             })}
                             className="mt-2 w-full py-2 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-bold text-zinc-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors"
                         >

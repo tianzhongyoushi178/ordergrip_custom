@@ -125,6 +125,42 @@ const addBlueColorZone = async (page: Page) => {
   await expect(page.getByText('未設定（全体が金属色）')).toHaveCount(0, { timeout: 5_000 });
 };
 
+/** 縦カットを追加。デフォルト長45では z15-30 に入り、カラー区間 (z15-30) と重なる。 */
+const addVerticalCut = async (page: Page) => {
+  await clickButton(page, /^縦$/);
+  await expect(page.getByRole('heading', { name: '縦カット' })).toBeVisible({ timeout: 5_000 });
+  await clickButton(page, /^追加$/);
+};
+
+/** カラー区間行の「塗り対象」セレクタ (全面/溝のみ/溝以外)。 */
+const colorTargetSelect = (page: Page) =>
+  page.locator('label', { hasText: '塗り対象' }).locator('select');
+
+/** Canvas をキャプチャし、青系アクセント (B が R/G より明確に大きい) 画素の割合を返す。 */
+const blueRatio = async (page: Page): Promise<number> => {
+  return await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return 0;
+    const w = canvas.width, h = canvas.height;
+    if (w === 0 || h === 0) return 0;
+    const c2 = document.createElement('canvas');
+    c2.width = w; c2.height = h;
+    const ctx = c2.getContext('2d');
+    if (!ctx) return 0;
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(canvas, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let blue = 0;
+    const total = w * h;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      if (b > 60 && b - r > 25 && b - g > 15) blue++;
+    }
+    return blue / total;
+  });
+};
+
 const mockShareSideEffects = async (page: Page) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'open', {
@@ -259,5 +295,32 @@ test.describe('3D描画リグレッション', () => {
 
     await attachCanvas(page, testInfo, '3d-max-dims-cut.png');
     await assertHealthyCanvas(page);
+  });
+
+  test('カラー塗り分け: 縦カット溝で 全面/溝のみ/溝以外 を切替えても健全 & 着色量が変化', async ({ page }) => {
+    // 縦カット geometry の再生成 + 大画面 canvas のピクセル読取を複数回行うため余裕を持たせる
+    test.setTimeout(240_000);
+    await openEditor(page);
+    await addVerticalCut(page);
+    await addBlueColorZone(page); // 既定は target='all' (全周)
+    await page.waitForTimeout(800);
+    const allBlue = await blueRatio(page);
+    expect(allBlue, '全面: 区間が青く塗られている').toBeGreaterThan(0.005);
+
+    // 溝のみ: 縦カットの溝の中だけ青 → 全面より青が減る
+    await colorTargetSelect(page).selectOption('groove');
+    await page.waitForTimeout(800);
+    const grooveBlue = await blueRatio(page);
+
+    // 溝以外(山だけ): 溝を除外して山に青 → 全面より減るが、外向きの山は可視面が広く溝のみより多い
+    await colorTargetSelect(page).selectOption('land');
+    await page.waitForTimeout(800);
+    const landBlue = await blueRatio(page);
+
+    await assertHealthyCanvas(page); // 塗り分け後も WebGL 破綻なし
+
+    expect(grooveBlue, '溝のみは全面より青が少ない').toBeLessThan(allBlue);
+    expect(landBlue, '溝以外も全面より青が少ない').toBeLessThan(allBlue);
+    expect(landBlue, '溝以外(山)は溝のみより青が多い').toBeGreaterThan(grooveBlue);
   });
 });

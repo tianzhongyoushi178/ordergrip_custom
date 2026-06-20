@@ -60,11 +60,16 @@ export interface PolygonZone {
   sides: number;  // 5〜11
 }
 
+/** カラーゾーンの塗り対象: 'all'=全周 / 'groove'=縦カット系の溝の中だけ / 'land'=溝以外(山)だけ。 */
+export type ColorTarget = 'all' | 'groove' | 'land';
+
 /** 指定 Z 区間にアクセント色を塗るカラーゾーン (色は accentColor で共通)。 */
 export interface ColorZone {
   id: string;
   startZ: number; // mm from front
   endZ: number;   // mm from front
+  /** 塗り対象 (省略時='all'=全周)。'groove'=縦カット系の溝の中だけ / 'land'=溝以外(山)だけ。 */
+  target?: ColorTarget;
 }
 
 export interface OutlinePoint {

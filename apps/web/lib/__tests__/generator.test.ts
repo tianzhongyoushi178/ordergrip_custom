@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { generateProfile, generateBarrelGeometry, polygonSidesAt, isColoredAt, makeKnurlAreaRemovedFn } from '../math/generator';
+import { generateProfile, generateBarrelGeometry, polygonSidesAt, isColoredAt, colorTargetAt, makeKnurlAreaRemovedFn } from '../math/generator';
 import { calculatePhysics } from '../math/physics';
-import type { CutZone, PolygonZone, ColorZone } from '../store/useBarrelStore';
+import type { CutZone, PolygonZone, ColorZone, ColorTarget } from '../store/useBarrelStore';
 
 describe('generateProfile', () => {
   // =========================================
@@ -708,6 +708,71 @@ describe('isColoredAt', () => {
     expect(isColoredAt(zones, 10)).toBe(true);
     expect(isColoredAt(zones, 20)).toBe(false);
     expect(isColoredAt([], 15)).toBe(false);
+  });
+});
+
+describe('colorTargetAt', () => {
+  it('区間内は target を返す / target 省略時は all / 区間外・空は null', () => {
+    const zones: ColorZone[] = [{ id: 'a', startZ: 10, endZ: 20, target: 'groove' }];
+    expect(colorTargetAt(zones, 15)).toBe('groove');
+    expect(colorTargetAt([{ id: 'b', startZ: 0, endZ: 50 }], 25)).toBe('all'); // target 省略 → all
+    expect(colorTargetAt(zones, 5)).toBe(null);
+    expect(colorTargetAt([], 15)).toBe(null);
+  });
+});
+
+describe('カラー塗り分け (colorZones target)', () => {
+  const ACCENT = '#ff0000';
+  const accent = new THREE.Color(ACCENT);
+  const BASE = new THREE.Color('#D1D5DB'); // generator のベース金属色
+  const vcut: CutZone = {
+    id: 'v', type: 'vertical', startZ: 10, endZ: 35,
+    properties: { depth: 0.5, itemCount: 12, grooveFraction: 0.5 },
+  };
+  const build = (target: ColorTarget) =>
+    generateBarrelGeometry(
+      45, 7.0, [vcut], 10, 10, 8, 8, [], 'taper', 'taper', 'smooth',
+      [], [{ id: 'c', startZ: 15, endZ: 30, target }], ACCENT,
+    );
+
+  // 指定バレル Z の外周面頂点を、最近傍でアクセント色 / 地金色に分類して数える
+  const countAt = (geom: ReturnType<typeof generateBarrelGeometry>, bz: number) => {
+    const pos = geom.getAttribute('position');
+    const col = geom.getAttribute('color');
+    let accentN = 0, baseN = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(-pos.getY(i) - bz) > 0.05) continue;
+      if (Math.hypot(pos.getX(i), pos.getZ(i)) <= 2.5) continue; // 穴は除外
+      const dA = Math.abs(col.getX(i) - accent.r) + Math.abs(col.getY(i) - accent.g) + Math.abs(col.getZ(i) - accent.b);
+      const dB = Math.abs(col.getX(i) - BASE.r) + Math.abs(col.getY(i) - BASE.g) + Math.abs(col.getZ(i) - BASE.b);
+      if (dA < dB) accentN++; else baseN++;
+    }
+    return { accentN, baseN };
+  };
+
+  it("'all': 区間内の外周は全周アクセント色 (地金色なし)", () => {
+    const { accentN, baseN } = countAt(build('all'), 22.5);
+    expect(accentN).toBeGreaterThan(0);
+    expect(baseN).toBe(0);
+  });
+
+  it("'groove': 区間内に溝(accent)と山(base)が混在する", () => {
+    const { accentN, baseN } = countAt(build('groove'), 22.5);
+    expect(accentN).toBeGreaterThan(0);
+    expect(baseN).toBeGreaterThan(0);
+  });
+
+  it("'land' は 'groove' と相補的 (溝/山が入れ替わる)", () => {
+    const g = countAt(build('groove'), 22.5);
+    const l = countAt(build('land'), 22.5);
+    expect(l.accentN).toBe(g.baseN);
+    expect(l.baseN).toBe(g.accentN);
+  });
+
+  it('区間外は着色されない (地金色のみ)', () => {
+    const { accentN, baseN } = countAt(build('all'), 5);
+    expect(accentN).toBe(0);
+    expect(baseN).toBeGreaterThan(0);
   });
 });
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CutZone, EndShape, OutlineInterp, PolygonZone, ColorZone } from '../store/useBarrelStore';
+import { CutZone, EndShape, OutlineInterp, PolygonZone, ColorZone, ColorTarget } from '../store/useBarrelStore';
 
 /** 内穴半径 (2BA, mm)。generateProfile の端部半径下限と generateBarrelGeometry の穴壁で共有。 */
 const HOLE_RADIUS = 2.1;
@@ -438,6 +438,14 @@ export const isColoredAt = (zones: ColorZone[], z: number): boolean => {
     return false;
 };
 
+/** z が属するカラー区間の塗り対象を返す (区間内なら target ?? 'all'、区間外は null)。 */
+export const colorTargetAt = (zones: ColorZone[], z: number): ColorTarget | null => {
+    for (const zone of zones) {
+        if (z >= zone.startZ && z < zone.endZ) return zone.target ?? 'all';
+    }
+    return null;
+};
+
 /** 3D生成・物理計算で共有する「上面のみ」フェード幅 (mm)。溝肩でこの距離をかけて掘り込みを0にする。 */
 export const KNURL_LAND_FADE_MM = 0.1;
 
@@ -782,8 +790,9 @@ export const generateBarrelGeometry = (
         const envR = useEnvelope ? envRAt(y) : rBase;
         const cutDepth = useEnvelope ? Math.max(0, envR - rBase) : 0;
         const polyWeight = sectionSides >= 5 ? Math.max(0, 1 - cutDepth / 0.05) : 0;
-        // 外周面かつカラー区間内なら accentColor、それ以外はベース金属色で着色
-        const sectionColored = isOuterSurface && isColoredAt(colorZones, y);
+        // 外周面のこの断面に効くカラー区間の塗り対象 (区間外/非外周は null)。
+        // 実際に accent を塗るかは頂点ごとに inGroove と組み合わせて決める。
+        const zoneTarget = isOuterSurface ? colorTargetAt(colorZones, y) : null;
 
         for (let jc = 0; jc < cols; jc++) {
             const { theta, u } = ring[jc];
@@ -795,6 +804,8 @@ export const generateBarrelGeometry = (
                 : rBase;
 
             let rMod = 0;
+            // この頂点が縦カット系の溝の角度域内か (カラー塗り分け用。land-fade とは独立に角度のみで判定)
+            let inGroove = false;
 
             // Apply modifications based on surface
             if (isOuterSurface) {
@@ -827,6 +838,7 @@ export const generateBarrelGeometry = (
                             if (localTheta < 0) localTheta += 1; // 負の剰余を 0..1 に正規化
 
                             if (localTheta < grooveFraction) {
+                                inGroove = true;
                                 // 溝内の位置 (0=溝端, 0.5=中央, 1=溝端)
                                 const gf = localTheta / grooveFraction; // 0..1
                                 const edgeWidth = 0.1; // エッジ遷移幅（溝幅に対する比率）
@@ -897,8 +909,16 @@ export const generateBarrelGeometry = (
             // but simple i/segments is okay for basic metal texture.
             uvs.push(1 - (i / heightSegments));
 
-            // 頂点カラー (外周面のカラー区間のみ accent、それ以外はベース金属色)
-            const col = sectionColored ? accent : baseColor;
+            // 頂点カラー: カラー区間内かつ塗り対象を満たせば accent、それ以外はベース金属色。
+            // all=全周 / groove=溝の中だけ / land=溝以外(山)だけ。
+            const colored = zoneTarget === 'all'
+                ? true
+                : zoneTarget === 'groove'
+                    ? inGroove
+                    : zoneTarget === 'land'
+                        ? !inGroove
+                        : false;
+            const col = colored ? accent : baseColor;
             colors.push(col.r, col.g, col.b);
         }
     }

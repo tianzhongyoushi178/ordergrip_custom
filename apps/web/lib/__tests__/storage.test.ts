@@ -226,6 +226,18 @@ describe('storage/local', () => {
       expect(result.colorZones!.every((z) => typeof z.id === 'string' && z.id.length > 0)).toBe(true);
     });
 
+    it('colorZones の target を検証 (groove/land は保持・不正/未指定は all)', () => {
+      const result = validateBarrelData({
+        colorZones: [
+          { id: 'g', startZ: 10, endZ: 20, target: 'groove' },
+          { id: 'l', startZ: 21, endZ: 30, target: 'land' },
+          { id: 'x', startZ: 31, endZ: 40, target: 'bogus' }, // 不正 → all
+          { id: 'n', startZ: 41, endZ: 44 },                   // 未指定 → all
+        ],
+      });
+      expect(result.colorZones!.map((z) => z.target)).toEqual(['groove', 'land', 'all', 'all']);
+    });
+
     it('不正な accentColor は無視', () => {
       const result = validateBarrelData({ accentColor: 'red' });
       expect(result.accentColor).toBeUndefined();
